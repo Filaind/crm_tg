@@ -231,6 +231,7 @@ export class AppDialogsManager {
 
   private managers: AppManagers;
 
+  //CRM
   async loadCRMDialogs() {
     this.sortedList.clear();
     const dialogs = CRMDialog.getCRMDialogsToLoad();
@@ -248,10 +249,12 @@ export class AppDialogsManager {
   }
 
   constructor() {
+
+    //CRM
     CRMDialog.emitter.on("load_crm_dialogs", () => {
       this.loadCRMDialogs();
     });
-
+    //CRM
     CRMDialog.emitter.on("load_dialogs", () => {
       this.sortedList.clear();
       this.scroll.loadedAll.bottom = false;
@@ -736,6 +739,8 @@ export class AppDialogsManager {
   private updateDialog(dialog: Dialog) {
     if (this.isDialogMustBeInViewport(dialog)) {
       if (!this.sortedList.has(dialog.peerId)) {
+
+        //CRM
         if(!CRMDialog.canAddDialog(dialog))
           return;
         
@@ -952,6 +957,7 @@ export class AppDialogsManager {
   }
 
   private loadDialogs(side: SliceSides) {
+    //CRM
     if (!CRMDialog.canLoadDefaultDialogs)
       return;
 
@@ -1060,6 +1066,7 @@ export class AppDialogsManager {
             //   return;
             // }
 
+            //CRM
             if(CRMDialog.canAddDialog(dialog))
             {
               const element = this.sortedList.add(dialog.peerId, true, /* undefined, false,  */cccc, false);
@@ -2131,6 +2138,7 @@ export class AppDialogsManager {
       });
     }
 
+    //CRM
     CRMDialog.emitter.on("updated", () => {
       createBadges();
     });

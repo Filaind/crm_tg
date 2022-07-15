@@ -82,6 +82,7 @@ export class AppSidebarLeft extends SidebarSlider {
     });
   }
 
+  //CRM
   createFilterTypeButton() {
 
     if (this.filterTypeButton != null)
@@ -105,7 +106,9 @@ export class AppSidebarLeft extends SidebarSlider {
   construct(managers: AppManagers) {
     this.managers = managers;
     //this._selectTab(0); // make first tab as default
+    
 
+    //CRM Тут кнопка фильтра по типу диалогов
     this.vList = document.createElement('p');
     this.vList.style.display = "contents";
 
@@ -119,6 +122,7 @@ export class AppSidebarLeft extends SidebarSlider {
 
     const sidebarHeader = this.sidebarEl.querySelector('.item-main .sidebar-header');
     sidebarHeader.append(this.vList);
+    //END
 
     const onNewGroupClick = () => {
       this.createTab(AppAddMembersTab).open({
