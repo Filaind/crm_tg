@@ -33,5 +33,6 @@ const sessionStorage = new LocalStorageController<{
   },
   k_build: number
 }>(/* ['kz_version'] */);
+
 MOUNT_CLASS_TO.appStorage = sessionStorage;
 export default sessionStorage;

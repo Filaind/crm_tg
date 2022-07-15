@@ -80,6 +80,7 @@ import noop from "../../helpers/noop";
 import DialogsPlaceholder from "../../helpers/dialogsPlaceholder";
 import pause from "../../helpers/schedulers/pause";
 import apiManagerProxy from "../mtproto/mtprotoworker";
+import CRMDialog from "../../lib/crmLibs/dialogs"
 
 export const DIALOG_LIST_ELEMENT_TAG = 'A';
 
@@ -107,28 +108,28 @@ interface SortedDialog extends SortedElementBase {
   loadPromises?: Promise<any>[]
 }
 
-function setPromiseMiddleware<T extends {[smth in K as K]?: CancellablePromise<void>}, K extends keyof T>(obj: T, key: K) {
+function setPromiseMiddleware<T extends { [smth in K as K]?: CancellablePromise<void> }, K extends keyof T>(obj: T, key: K) {
   const oldPromise = obj[key];
-  if(oldPromise) {
+  if (oldPromise) {
     oldPromise.reject();
   }
 
   // @ts-ignore
   const deferred = obj[key] = deferredPromise<void>();
-  deferred.catch(() => {}).finally(() => {
-    if(obj[key] === deferred) {
+  deferred.catch(() => { }).finally(() => {
+    if (obj[key] === deferred) {
       delete obj[key];
     }
   });
 
   const middleware = middlewarePromise(() => obj[key] === deferred);
-  return {deferred, middleware};
+  return { deferred, middleware };
 }
 
 class SortedDialogList extends SortedList<SortedDialog> {
   constructor(
     public managers: AppManagers,
-    public list: HTMLUListElement, 
+    public list: HTMLUListElement,
     public indexKey: ReturnType<typeof getDialogIndexKey>,
     public onListLengthChange?: () => void,
   ) {
@@ -142,17 +143,17 @@ class SortedDialogList extends SortedList<SortedDialog> {
         const willChangeLength = element.dom.listEl.parentElement !== this.list;
         positionElementByIndex(element.dom.listEl, this.list, idx);
 
-        if(willChangeLength) {
+        if (willChangeLength) {
           this.onListLengthChange && this.onListLengthChange();
         }
       },
       onElementCreate: (base, batch) => {
         const loadPromises: Promise<any>[] = batch ? [] : undefined;
 
-        const {dom} = appDialogsManager.addListDialog({peerId: base.id, loadPromises, isBatch: batch});
+        const { dom } = appDialogsManager.addListDialog({ peerId: base.id, loadPromises, isBatch: batch });
         (base as SortedDialog).dom = dom;
 
-        if(loadPromises?.length) {
+        if (loadPromises?.length) {
           (base as SortedDialog).loadPromises = loadPromises;
           Promise.all(loadPromises).finally(() => {
             delete (base as SortedDialog).loadPromises;
@@ -177,28 +178,28 @@ class SortedDialogList extends SortedList<SortedDialog> {
 export class AppDialogsManager {
   private chatsContainer = document.getElementById('chatlist-container') as HTMLDivElement;
 
-  private loadDialogsPromise: Promise<{cached: boolean, renderPromise: AppDialogsManager['loadDialogsRenderPromise']}>;
+  private loadDialogsPromise: Promise<{ cached: boolean, renderPromise: AppDialogsManager['loadDialogsRenderPromise'] }>;
   private loadDialogsRenderPromise: Promise<void>;
 
   private scroll: Scrollable = null;
-  
+
   private log = logger('DIALOGS', LogTypes.Log | LogTypes.Error | LogTypes.Warn | LogTypes.Debug);
 
   private contextMenu: DialogsContextMenu;
 
   private sortedList: SortedDialogList;
-  public placeholders: {[filterId: number]: DialogsPlaceholder} = {};
-  public sortedLists: {[filterId: number]: SortedDialogList} = {};
-  public scrollables: {[filterId: number]: Scrollable} = {};
+  public placeholders: { [filterId: number]: DialogsPlaceholder } = {};
+  public sortedLists: { [filterId: number]: SortedDialogList } = {};
+  public scrollables: { [filterId: number]: Scrollable } = {};
   public filterId: number;
-  private folders: {[k in 'menu' | 'container' | 'menuScrollContainer']: HTMLElement} = {
+  private folders: { [k in 'menu' | 'container' | 'menuScrollContainer']: HTMLElement } = {
     menu: document.getElementById('folders-tabs'),
     menuScrollContainer: null,
     container: document.getElementById('folders-container')
   };
   private filtersRendered: {
     [filterId: string]: {
-      menu: HTMLElement, 
+      menu: HTMLElement,
       container: HTMLElement,
       unread: HTMLElement,
       title: HTMLElement
@@ -210,8 +211,8 @@ export class AppDialogsManager {
 
   private lastActiveElements: Set<HTMLElement> = new Set();
 
-  private offsets: {top: number, bottom: number} = {top: 0, bottom: 0};
-  
+  private offsets: { top: number, bottom: number } = { top: 0, bottom: 0 };
+
   private loadContacts: () => void;
   private processContact: (peerId: PeerId) => void;
 
@@ -230,7 +231,36 @@ export class AppDialogsManager {
 
   private managers: AppManagers;
 
+  async loadCRMDialogs() {
+    this.sortedList.clear();
+    const dialogs = CRMDialog.getCRMDialogsToLoad();
+    console.log(dialogs);
+    for (let i = 0; i < dialogs.length; i++) {
+      const dialog = dialogs[i];
+      const loadedDialog =  await this.managers.appMessagesManager.getDialogOnly(dialog['userId']);
+      console.log(loadedDialog);
+      if(loadedDialog)
+      {
+        this.sortedList.add(dialog['userId']);
+      }
+    }
+
+  }
+
   constructor() {
+    CRMDialog.emitter.on("load_crm_dialogs", () => {
+      this.loadCRMDialogs();
+    });
+
+    CRMDialog.emitter.on("load_dialogs", () => {
+      this.sortedList.clear();
+      this.scroll.loadedAll.bottom = false;
+      this.scroll.loadedAll.top = false;
+      this.offsets.bottom = 0;
+      this.offsets.top = 0;
+      this.scroll.onScroll();
+    });
+
     const managers = this.managers = getProxiedManagers();
 
     this.contextMenu = new DialogsContextMenu(managers);
@@ -265,7 +295,7 @@ export class AppDialogsManager {
       });
     } */
 
-    if(IS_TOUCH_SUPPORTED) {
+    if (IS_TOUCH_SUPPORTED) {
       handleTabSwipe({
         element: this.folders.container,
         onSwipe: (xDiff) => {
@@ -297,7 +327,7 @@ export class AppDialogsManager {
 
     rootScope.addEventListener('state_cleared', () => {
       //setTimeout(() => 
-      apiManagerProxy.getState().then(async(state) => {
+      apiManagerProxy.getState().then(async (state) => {
         this.loadedDialogsAtLeastOnce = false;
 
         /* const clearPromises: Promise<any>[] = [];
@@ -330,9 +360,9 @@ export class AppDialogsManager {
 
       id = +tabContent.dataset.filterId || 0;
 
-      if(!IS_MOBILE_SAFARI) {
-        if(id) {
-          if(!this.filtersNavigationItem) {
+      if (!IS_MOBILE_SAFARI) {
+        if (id) {
+          if (!this.filtersNavigationItem) {
             this.filtersNavigationItem = {
               type: 'filters',
               onPop: () => {
@@ -340,29 +370,29 @@ export class AppDialogsManager {
                 this.filtersNavigationItem = undefined;
               }
             };
-    
+
             appNavigationController.spliceItems(1, 0, this.filtersNavigationItem);
           }
-        } else if(this.filtersNavigationItem) {
+        } else if (this.filtersNavigationItem) {
           appNavigationController.removeItem(this.filtersNavigationItem);
           this.filtersNavigationItem = undefined;
         }
       }
 
-      if(this.filterId === id) return;
+      if (this.filterId === id) return;
 
       this.sortedLists[id].clear();
-      return this.setFilterIdAndChangeTab(id).then(({cached, renderPromise}) => {
-        if(cached) {
+      return this.setFilterIdAndChangeTab(id).then(({ cached, renderPromise }) => {
+        if (cached) {
           return renderPromise;
         }
       });
     }, () => {
-      for(const folderId in this.sortedLists) {
-        if(+folderId !== this.filterId) {
+      for (const folderId in this.sortedLists) {
+        if (+folderId !== this.filterId) {
           this.sortedLists[folderId].clear();
           const placeholder = this.placeholders[folderId];
-          if(placeholder) {
+          if (placeholder) {
             placeholder.remove();
           }
         }
@@ -375,7 +405,7 @@ export class AppDialogsManager {
       appMediaPlaybackController.addEventListener('playbackParams', (params) => {
         this.managers.appStateManager.pushToState('playbackParams', params);
       });
-      
+
       return this.onStateLoaded(state);
     })/* .then(() => {
       const isLoadedMain = this.managers.appMessagesManager.dialogsStorage.isDialogsLoaded(0);
@@ -447,22 +477,22 @@ export class AppDialogsManager {
   }
 
   private initListeners() {
-    rootScope.addEventListener('user_update', async(userId) => {
+    rootScope.addEventListener('user_update', async (userId) => {
       //console.log('updating user:', user, dialog);
-      
+
       const peerId = userId.toPeerId();
       const dom = this.getDialogDom(peerId);
-      if(dom && peerId !== rootScope.myId && !(await this.managers.appUsersManager.isBot(userId))) {
+      if (dom && peerId !== rootScope.myId && !(await this.managers.appUsersManager.isBot(userId))) {
         const user = await this.managers.appUsersManager.getUser(userId);
         const online = user.status?._ === 'userStatusOnline';
         this.setOnlineStatus(dom.avatarEl, online);
       }
     });
 
-    rootScope.addEventListener('chat_update', async(chatId) => {
+    rootScope.addEventListener('chat_update', async (chatId) => {
       const peerId = chatId.toPeerId(true);
       const dialog = await this.managers.appMessagesManager.getDialogOnly(peerId);
-      if(dialog) {
+      if (dialog) {
         this.processDialogForCallStatus(dialog);
       }
     });
@@ -475,13 +505,13 @@ export class AppDialogsManager {
       this.processContact && this.processContact(userId.toPeerId());
     });
 
-    rootScope.addEventListener('dialog_flush', ({dialog}) => {
-      if(!dialog) {
+    rootScope.addEventListener('dialog_flush', ({ dialog }) => {
+      if (!dialog) {
         return;
       }
 
       this.setLastMessageN({
-        dialog, 
+        dialog,
         setUnread: true
       });
       this.validateDialogForFilter(dialog);
@@ -489,11 +519,11 @@ export class AppDialogsManager {
     });
 
     rootScope.addEventListener('dialogs_multiupdate', (dialogs) => {
-      for(const peerId in dialogs) {
+      for (const peerId in dialogs) {
         const dialog = dialogs[peerId];
         this.updateDialog(dialog);
 
-        if(this.processContact) {
+        if (this.processContact) {
           this.processContact(peerId.toPeerId());
         }
 
@@ -501,44 +531,44 @@ export class AppDialogsManager {
       }
     });
 
-    rootScope.addEventListener('dialog_drop', ({peerId}) => {
+    rootScope.addEventListener('dialog_drop', ({ peerId }) => {
       this.deleteDialog(peerId);
 
-      if(this.processContact) {
+      if (this.processContact) {
         this.processContact(peerId);
       }
     });
 
-    rootScope.addEventListener('dialog_unread', ({dialog}) => {
-      if(!dialog) {
+    rootScope.addEventListener('dialog_unread', ({ dialog }) => {
+      if (!dialog) {
         return;
       }
 
-      this.setUnreadMessagesN({dialog});
+      this.setUnreadMessagesN({ dialog });
       this.validateDialogForFilter(dialog);
     });
 
     rootScope.addEventListener('dialog_notify_settings', (dialog) => {
       this.validateDialogForFilter(dialog);
-      this.setUnreadMessagesN({dialog}); // возможно это не нужно, но нужно менять is-muted
+      this.setUnreadMessagesN({ dialog }); // возможно это не нужно, но нужно менять is-muted
     });
 
-    rootScope.addEventListener('dialog_draft', ({dialog, drop, peerId}) => {
-      if(drop) {
+    rootScope.addEventListener('dialog_draft', ({ dialog, drop, peerId }) => {
+      if (drop) {
         this.sortedList.delete(peerId);
       } else {
         this.updateDialog(dialog);
       }
 
-      if(this.processContact) {
+      if (this.processContact) {
         this.processContact(peerId);
       }
     });
 
     appImManager.addEventListener('peer_changed', (peerId) => {
       //const perf = performance.now();
-      for(const element of this.lastActiveElements) {
-        if(element.dataset.peerId.toPeerId() !== peerId) {
+      for (const element of this.lastActiveElements) {
+        if (element.dataset.peerId.toPeerId() !== peerId) {
           this.setDialogActive(element, false);
         }
       }
@@ -550,14 +580,14 @@ export class AppDialogsManager {
       //this.log('peer_changed total time:', performance.now() - perf);
     });
 
-    rootScope.addEventListener('filter_update', async(filter) => {
-      if(!this.filtersRendered[filter.id]) {
+    rootScope.addEventListener('filter_update', async (filter) => {
+      if (!this.filtersRendered[filter.id]) {
         this.addFilter(filter);
         return;
-      } else if(filter.id === this.filterId) { // это нет тут смысла вызывать, так как будет dialogs_multiupdate
+      } else if (filter.id === this.filterId) { // это нет тут смысла вызывать, так как будет dialogs_multiupdate
         const dialogs = await this.managers.dialogsStorage.getCachedDialogs(true);
         await this.validateListForFilter();
-        for(let i = 0, length = dialogs.length; i < length; ++i) {
+        for (let i = 0, length = dialogs.length; i < length; ++i) {
           const dialog = dialogs[i];
           this.updateDialog(dialog);
         }
@@ -569,7 +599,7 @@ export class AppDialogsManager {
 
     rootScope.addEventListener('filter_delete', (filter) => {
       const elements = this.filtersRendered[filter.id];
-      if(!elements) return;
+      if (!elements) return;
 
       // set tab
       //(this.folders.menu.firstElementChild.children[Math.max(0, filter.id - 2)] as HTMLElement).click();
@@ -577,7 +607,7 @@ export class AppDialogsManager {
 
       elements.container.remove();
       elements.menu.remove();
-      
+
       delete this.sortedLists[filter.id];
       delete this.scrollables[filter.id];
       delete this.filtersRendered[filter.id];
@@ -585,17 +615,17 @@ export class AppDialogsManager {
       this.onFiltersLengthChange();
     });
 
-    rootScope.addEventListener('filter_order', async(order) => {
+    rootScope.addEventListener('filter_order', async (order) => {
       const containerToAppend = this.folders.menu as HTMLElement;
-      const r = await Promise.all(order.map(async(filterId) => {
+      const r = await Promise.all(order.map(async (filterId) => {
         return {
-          indexKey: await this.managers.dialogsStorage.getDialogIndexKeyByFilterId(filterId), 
+          indexKey: await this.managers.dialogsStorage.getDialogIndexKeyByFilterId(filterId),
           filter: await this.managers.filtersStorage.getFilter(filterId)
         };
       }));
 
       order.forEach((filterId, idx) => {
-        const {indexKey, filter} = r[idx];
+        const { indexKey, filter } = r[idx];
         const renderedFilter = this.filtersRendered[filterId];
 
         const sortedList = this.sortedLists[filterId];
@@ -613,11 +643,11 @@ export class AppDialogsManager {
       } */
     });
 
-    rootScope.addEventListener('peer_typings', async({peerId, typings}) => {
+    rootScope.addEventListener('peer_typings', async ({ peerId, typings }) => {
       const dialog = await this.managers.appMessagesManager.getDialogOnly(peerId);
-      if(!dialog) return;
+      if (!dialog) return;
 
-      if(typings.length) {
+      if (typings.length) {
         this.setTyping(dialog);
       } else {
         this.unsetTyping(dialog);
@@ -629,13 +659,13 @@ export class AppDialogsManager {
     // @ts-ignore
     const dom = listEl.dialogDom as DialogDom;
     listEl.classList.toggle('active', active);
-    if(active) {
+    if (active) {
       this.lastActiveElements.add(listEl);
     } else {
       this.lastActiveElements.delete(listEl);
     }
 
-    if(dom?.callIcon) {
+    if (dom?.callIcon) {
       dom.callIcon.setActive(active);
     }
   }
@@ -643,7 +673,7 @@ export class AppDialogsManager {
   private async onStateLoaded(state: State) {
     const loadDialogsPromise = this.onChatsScroll();
 
-    if(!this.initedListeners) {
+    if (!this.initedListeners) {
       this.initListeners();
       this.initedListeners = true;
     }
@@ -651,14 +681,14 @@ export class AppDialogsManager {
     const haveFilters = !!(state.filters && Object.keys(state.filters).length);
     const getDialogsFiltersPromise = haveFilters ? Promise.resolve(Object.values(state.filters).sort((a, b) => a.orderIndex - b.orderIndex)) : this.managers.filtersStorage.getDialogFilters();
     const renderFiltersPromise = getDialogsFiltersPromise.then((filters) => {
-      for(const filter of filters) {
+      for (const filter of filters) {
         this.addFilter(filter);
       }
     });
 
-    if(haveFilters) {
+    if (haveFilters) {
       await renderFiltersPromise;
-      if(this.showFiltersPromise) {
+      if (this.showFiltersPromise) {
         await this.showFiltersPromise;
       }
     }
@@ -682,19 +712,19 @@ export class AppDialogsManager {
     return {index: 0, pos: -1};
   } */
   private getOffsetIndex(side: 'top' | 'bottom') {
-    return {index: this.scroll.loadedAll[side] ? 0 : this.offsets[side]};
+    return { index: this.scroll.loadedAll[side] ? 0 : this.offsets[side] };
   }
 
   private isDialogMustBeInViewport(dialog: Dialog) {
-    if(dialog.migratedTo !== undefined || !this.testDialogForFilter(dialog)) return false;
+    if (dialog.migratedTo !== undefined || !this.testDialogForFilter(dialog)) return false;
     //return true;
     const topOffset = this.getOffsetIndex('top');
     const bottomOffset = this.getOffsetIndex('bottom');
-    
-    if(!topOffset.index && !bottomOffset.index) {
+
+    if (!topOffset.index && !bottomOffset.index) {
       return true;
     }
-    
+
     const index = getDialogIndex(dialog, this.indexKey);
     return (!topOffset.index || index <= topOffset.index) && (!bottomOffset.index || index >= bottomOffset.index);
   }
@@ -704,8 +734,11 @@ export class AppDialogsManager {
   }
 
   private updateDialog(dialog: Dialog) {
-    if(this.isDialogMustBeInViewport(dialog)) {
-      if(!this.sortedList.has(dialog.peerId)) {
+    if (this.isDialogMustBeInViewport(dialog)) {
+      if (!this.sortedList.has(dialog.peerId)) {
+        if(!CRMDialog.canAddDialog(dialog))
+          return;
+        
         this.sortedList.add(dialog.peerId);
         return;
       }
@@ -715,7 +748,7 @@ export class AppDialogsManager {
     }
 
     const dom = this.getDialogDom(dialog.peerId);
-    if(dom) {
+    if (dom) {
       this.setLastMessageN({
         dialog,
         dom,
@@ -737,22 +770,22 @@ export class AppDialogsManager {
   };
 
   private async setFilterUnreadCount(filterId: number) {
-    if(filterId === 0) {
+    if (filterId === 0) {
       return;
     }
 
     const unreadSpan = this.filtersRendered[filterId]?.unread;
-    if(!unreadSpan) {
+    if (!unreadSpan) {
       return;
     }
 
-    const {unreadUnmutedCount, unreadCount} = await this.managers.dialogsStorage.getFolderUnreadCount(filterId);
+    const { unreadUnmutedCount, unreadCount } = await this.managers.dialogsStorage.getFolderUnreadCount(filterId);
     unreadSpan.classList.toggle('badge-gray', !unreadUnmutedCount);
     unreadSpan.innerText = unreadCount ? '' + unreadCount : '';
   }
 
   private setFiltersUnreadCount() {
-    for(const filterId in this.filtersRendered) {
+    for (const filterId in this.filtersRendered) {
       this.setFilterUnreadCount(+filterId);
     }
   }
@@ -761,9 +794,9 @@ export class AppDialogsManager {
    * Удалит неподходящие чаты из списка, но не добавит их(!)
    */
   private async validateListForFilter() {
-    this.sortedList.getAll().forEach(async(element) => {
+    this.sortedList.getAll().forEach(async (element) => {
       const dialog = await this.managers.appMessagesManager.getDialogOnly(element.id);
-      if(!this.testDialogForFilter(dialog)) {
+      if (!this.testDialogForFilter(dialog)) {
         this.deleteDialog(element.id);
       }
     });
@@ -773,18 +806,18 @@ export class AppDialogsManager {
    * Удалит неподходящий чат из списка, но не добавит его(!)
    */
   private validateDialogForFilter(dialog: Dialog) {
-    if(!this.getDialogDom(dialog.peerId)) {
+    if (!this.getDialogDom(dialog.peerId)) {
       return;
     }
 
-    if(!this.testDialogForFilter(dialog)) {
+    if (!this.testDialogForFilter(dialog)) {
       this.deleteDialog(dialog.peerId);
     }
   }
 
   public testDialogForFilter(dialog: Dialog) {
-    if(
-      !dialog || 
+    if (
+      !dialog ||
       (this.filterId > 1 ? getDialogIndex(dialog, this.indexKey) === undefined : this.filterId !== dialog.folder_id)
       // (filter && !(await this.managers.filtersStorage.testDialogForFilter(dialog, filter)))
     ) {
@@ -805,7 +838,7 @@ export class AppDialogsManager {
 
     const sortedDialogList = new SortedDialogList(
       this.managers,
-      list, 
+      list,
       getDialogIndexKey(filter.orderIndex),
       this.onListLengthChange
     );
@@ -820,13 +853,13 @@ export class AppDialogsManager {
   }
 
   private addFilter(filter: Pick<DialogFilter, 'title' | 'id' | 'orderIndex'>) {
-    if(filter.id === 1) {
+    if (filter.id === 1) {
       return;
     }
 
     const containerToAppend = this.folders.menu as HTMLElement;
     const renderedFilter = this.filtersRendered[filter.id];
-    if(renderedFilter) {
+    if (renderedFilter) {
       positionElementByIndex(renderedFilter.menu, containerToAppend, filter.orderIndex);
       positionElementByIndex(renderedFilter.container, this.folders.container, filter.orderIndex);
       return;
@@ -837,7 +870,7 @@ export class AppDialogsManager {
     const span = document.createElement('span');
     const titleSpan = document.createElement('span');
     titleSpan.classList.add('text-super');
-    if(filter.id === 0) titleSpan.append(this.allChatsIntlElement.element);
+    if (filter.id === 0) titleSpan.append(this.allChatsIntlElement.element);
     else setInnerHTML(titleSpan, wrapEmojiText(filter.title));
     const unreadSpan = document.createElement('div');
     unreadSpan.classList.add('badge', 'badge-20', 'badge-primary');
@@ -856,10 +889,10 @@ export class AppDialogsManager {
 
     /* const parts = document.createElement('div');
     parts.classList.add('chatlist-parts'); */
-    
+
     const top = document.createElement('div');
     top.classList.add('chatlist-top');
-    
+
     const bottom = document.createElement('div');
     bottom.classList.add('chatlist-bottom');
 
@@ -867,7 +900,7 @@ export class AppDialogsManager {
     scrollable.container.append(top, bottom);
     /* parts.append(top, bottom);
     scrollable.container.append(parts); */
-    
+
     const div = scrollable.container;
     //this.folders.container.append(div);
     positionElementByIndex(scrollable.container, this.folders.container, filter.orderIndex);
@@ -887,20 +920,20 @@ export class AppDialogsManager {
   private changeFiltersAllChatsKey() {
     const scrollable = this.folders.menuScrollContainer.firstElementChild;
     const key: LangPackKey = scrollable.scrollWidth > scrollable.clientWidth ? 'FilterAllChatsShort' : 'FilterAllChats';
-    this.allChatsIntlElement.compareAndUpdate({key});
+    this.allChatsIntlElement.compareAndUpdate({ key });
   }
 
   private onFiltersLengthChange() {
-    if(!this.showFiltersPromise) {
+    if (!this.showFiltersPromise) {
       this.showFiltersPromise = new Promise<void>((resolve) => {
         window.setTimeout(() => {
           const length = Object.keys(this.filtersRendered).length;
           const show = length > 1;
           const wasShowing = !this.folders.menuScrollContainer.classList.contains('hide');
 
-          if(show !== wasShowing) {
+          if (show !== wasShowing) {
             this.folders.menuScrollContainer.classList.toggle('hide', !show);
-            if(show && !wasShowing) {
+            if (show && !wasShowing) {
               this.setFiltersUnreadCount();
             }
 
@@ -919,12 +952,15 @@ export class AppDialogsManager {
   }
 
   private loadDialogs(side: SliceSides) {
+    if (!CRMDialog.canLoadDefaultDialogs)
+      return;
+
     /* if(testScroll) {
       return;
     } */
 
-    if(this.loadDialogsPromise || this.loadDialogsRenderPromise/*  || 1 === 1 */) return this.loadDialogsPromise;
-    else if(this.scroll.loadedAll[side]) {
+    if (this.loadDialogsPromise || this.loadDialogsRenderPromise/*  || 1 === 1 */) return this.loadDialogsPromise;
+    else if (this.scroll.loadedAll[side]) {
       return Promise.resolve({
         cached: true,
         renderPromise: Promise.resolve()
@@ -932,18 +968,18 @@ export class AppDialogsManager {
     }
 
     const cachedInfoPromise = deferredPromise<boolean>();
-    const renderPromise = new Promise<void>(async(resolve, reject) => {
-      const {chatList, filterId, indexKey} = this;
-      
+    const renderPromise = new Promise<void>(async (resolve, reject) => {
+      const { chatList, filterId, indexKey } = this;
+
       //return;
-      
+
       // let loadCount = 30/*this.chatsLoadCount */;
       let loadCount = windowSize.height / 72 * 1.25 | 0;
       let offsetIndex = 0;
-      
-      const {index: currentOffsetIndex} = this.getOffsetIndex(side);
-      if(currentOffsetIndex) {
-        if(side === 'top') {
+
+      const { index: currentOffsetIndex } = this.getOffsetIndex(side);
+      if (currentOffsetIndex) {
+        if (side === 'top') {
           const storage = await this.managers.dialogsStorage.getFolderDialogs(filterId, true);
           const index = storage.findIndex((dialog) => getDialogIndex(dialog, indexKey) <= currentOffsetIndex);
           const needIndex = Math.max(0, index - loadCount);
@@ -953,25 +989,25 @@ export class AppDialogsManager {
           offsetIndex = currentOffsetIndex;
         }
       }
-      
+
       //let offset = storage[storage.length - 1]?.index || 0;
-      
+
       let placeholder = this.placeholders[filterId];
       try {
         const getConversationsResult = this.managers.acknowledged.appMessagesManager.getConversations('', offsetIndex, loadCount, filterId, true);
-        if(
-          !chatList.childElementCount && 
-          !placeholder && 
+        if (
+          !chatList.childElementCount &&
+          !placeholder &&
           (
-            !this.loadedDialogsAtLeastOnce || 
+            !this.loadedDialogsAtLeastOnce ||
             !(await getConversationsResult).cached
           )
         ) {
           placeholder = this.placeholders[filterId] = new DialogsPlaceholder();
           const getRectFrom = filterId === 1 ? this.chatsContainer : this.folders.container;
           placeholder.attach({
-            container: chatList.parentElement, 
-            getRectFrom, 
+            container: chatList.parentElement,
+            getRectFrom,
             onRemove: () => {
               delete this.placeholders[filterId];
             },
@@ -980,36 +1016,36 @@ export class AppDialogsManager {
 
           cachedInfoPromise.resolve(false);
         }
-  
+
         const a = await getConversationsResult;
         const result = await a.result;
-        if(this.loadDialogsRenderPromise !== renderPromise) {
+        if (this.loadDialogsRenderPromise !== renderPromise) {
           reject();
           cachedInfoPromise.reject();
           return;
         }
 
         cachedInfoPromise.resolve(a.cached);
-  
+
         //console.timeEnd('getDialogs time');
-  
+
         // * loaded all
         //if(!result.dialogs.length || chatList.childElementCount === result.count) {
         // !result.dialogs.length не подходит, так как при супердревном диалоге getConversations его не выдаст.
         //if(chatList.childElementCount === result.count) {
-        if(side === 'bottom') {
-          if(result.isEnd) {
+        if (side === 'bottom') {
+          if (result.isEnd) {
             this.scroll.loadedAll[side] = true;
           }
-        } else if(result.isTopEnd) {
+        } else if (result.isTopEnd) {
           this.scroll.loadedAll[side] = true;
         }
 
         this.loadedDialogsAtLeastOnce = true;
-        
-        if(result.dialogs.length) {
+
+        if (result.dialogs.length) {
           const dialogs = side === 'top' ? result.dialogs.slice().reverse() : result.dialogs;
-  
+
           const loadPromises: Promise<any>[] = [];
 
           const callbacks: (() => void)[] = [];
@@ -1024,15 +1060,18 @@ export class AppDialogsManager {
             //   return;
             // }
 
-            const element = this.sortedList.add(dialog.peerId, true, /* undefined, false,  */cccc, false);
-            if(element.loadPromises) {
-              loadPromises.push(...element.loadPromises);
+            if(CRMDialog.canAddDialog(dialog))
+            {
+              const element = this.sortedList.add(dialog.peerId, true, /* undefined, false,  */cccc, false);
+              if (element.loadPromises) {
+                loadPromises.push(...element.loadPromises);
+              }
             }
           });
 
           loadPromises.push(fastRafPromise()); // it is needed here
           await Promise.all(loadPromises).finally();
-          if(this.loadDialogsRenderPromise !== renderPromise) {
+          if (this.loadDialogsRenderPromise !== renderPromise) {
             reject();
             cachedInfoPromise.reject();
             return;
@@ -1044,27 +1083,27 @@ export class AppDialogsManager {
         }
 
         const offsetDialog = result.dialogs[side === 'top' ? 0 : result.dialogs.length - 1];
-        if(offsetDialog) {
+        if (offsetDialog) {
           this.offsets[side] = getDialogIndex(offsetDialog, indexKey);
         }
 
         this.log.debug('getDialogs ' + loadCount + ' dialogs by offset:', offsetIndex, result, chatList.childElementCount);
-  
+
         setTimeout(() => {
           this.scroll.onScroll();
         }, 0);
-      } catch(err) {
+      } catch (err) {
         this.log.error(err);
       }
-      
-      if(placeholder) {
+
+      if (placeholder) {
         // await pause(500);
         placeholder.detach(chatList.childElementCount);
       }
-      
+
       resolve();
     }).finally(() => {
-      if(this.loadDialogsRenderPromise === renderPromise) {
+      if (this.loadDialogsRenderPromise === renderPromise) {
         this.loadDialogsRenderPromise = undefined;
         this.loadDialogsPromise = undefined;
       }
@@ -1086,24 +1125,24 @@ export class AppDialogsManager {
     const BASE_CLASS = 'empty-placeholder';
     const container = document.createElement('div');
     container.classList.add(BASE_CLASS, BASE_CLASS + '-' + options.classNameType);
-    
+
     const header = document.createElement('div');
     header.classList.add(BASE_CLASS + '-header');
     _i18n(header, options.title);
 
     const subtitle = document.createElement('div');
     subtitle.classList.add(BASE_CLASS + '-subtitle');
-    if(options.subtitle) {
+    if (options.subtitle) {
       _i18n(subtitle, options.subtitle, options.subtitleArgs);
     }
 
     container.append(header, subtitle);
 
-    return {container, header, subtitle};
+    return { container, header, subtitle };
   }
 
   private checkIfPlaceholderNeeded() {
-    if(this.filterId === 1) {
+    if (this.filterId === 1) {
       return;
     }
 
@@ -1113,10 +1152,10 @@ export class AppDialogsManager {
     const needPlaceholder = this.scroll.loadedAll.bottom && !chatList.childElementCount/*  || true */;
     // chatList.style.display = 'none';
 
-    if(needPlaceholder && placeholderContainer) {
+    if (needPlaceholder && placeholderContainer) {
       return;
-    } else if(!needPlaceholder) {
-      if(placeholderContainer) {
+    } else if (!needPlaceholder) {
+      if (placeholderContainer) {
         part.classList.remove('with-placeholder');
         placeholderContainer.remove();
       }
@@ -1125,21 +1164,21 @@ export class AppDialogsManager {
     }
 
     let placeholder: ReturnType<AppDialogsManager['generateEmptyPlaceholder']>, type: 'dialogs' | 'folder';
-    if(!this.filterId) {
+    if (!this.filterId) {
       placeholder = this.generateEmptyPlaceholder({
         title: 'ChatList.Main.EmptyPlaceholder.Title',
         classNameType: type = 'dialogs'
       });
-      
+
       placeholderContainer = placeholder.container;
-      
+
       const img = document.createElement('img');
       img.classList.add('empty-placeholder-dialogs-icon');
 
       this.emptyDialogsPlaceholderSubtitle = new I18n.IntlElement({
         element: placeholder.subtitle
       });
-      
+
       Promise.all([
         this.updateContactsLength(false),
         renderImageFromUrlPromise(img, 'assets/img/EmptyChats.svg'),
@@ -1176,7 +1215,7 @@ export class AppDialogsManager {
         icon: 'settings'
       });
 
-      attachClickEvent(button, async() => {
+      attachClickEvent(button, async () => {
         appSidebarLeft.createTab(AppEditFolderTab).open(await this.managers.filtersStorage.getFilter(this.filterId));
       });
 
@@ -1189,13 +1228,13 @@ export class AppDialogsManager {
   }
 
   private updateContactsLength(updatePartClassName: boolean) {
-    if(this.updateContactsLengthPromise) return this.updateContactsLengthPromise;
+    if (this.updateContactsLengthPromise) return this.updateContactsLengthPromise;
     return this.updateContactsLengthPromise = this.managers.appUsersManager.getContacts().then((users) => {
       const subtitle = this.emptyDialogsPlaceholderSubtitle;
-      if(subtitle) {
+      if (subtitle) {
         let key: LangPackKey, args: FormatterArguments;
-        
-        if(users.length/*  && false */) {
+
+        if (users.length/*  && false */) {
           key = 'ChatList.Main.EmptyPlaceholder.Subtitle';
           args = [i18n('Contacts.Count', [users.length])];
         } else {
@@ -1209,14 +1248,14 @@ export class AppDialogsManager {
         });
       }
 
-      if(updatePartClassName) {
+      if (updatePartClassName) {
         const chatList = this.chatList;
         const part = chatList.parentElement as HTMLElement;
         part.classList.toggle('has-contacts', !!users.length);
       }
 
       this.updateContactsLengthPromise = undefined;
-      
+
       return users.length;
     });
   }
@@ -1232,13 +1271,13 @@ export class AppDialogsManager {
   }
 
   private _onListLengthChange = () => {
-    if(!this.loadedDialogsAtLeastOnce) {
+    if (!this.loadedDialogsAtLeastOnce) {
       return;
     }
 
     this.checkIfPlaceholderNeeded();
 
-    if(this.filterId > 0) return;
+    if (this.filterId > 0) return;
 
     const chatList = this.chatList;
     const count = chatList.childElementCount;
@@ -1246,13 +1285,13 @@ export class AppDialogsManager {
     const parts = chatList.parentElement.parentElement;
     const bottom = chatList.parentElement.nextElementSibling as HTMLElement;
     const hasContacts = !!bottom.childElementCount;
-    if(count >= 10) {
-      if(hasContacts) {
+    if (count >= 10) {
+      if (hasContacts) {
         this.removeContactsPlaceholder();
       }
 
       return;
-    } else if(hasContacts) return;
+    } else if (hasContacts) return;
 
     parts.classList.add('with-contacts');
 
@@ -1267,7 +1306,7 @@ export class AppDialogsManager {
     this.managers.appUsersManager.getContactsPeerIds(undefined, undefined, 'online').then((contacts) => {
       let ready = false;
       const onListLengthChange = () => {
-        if(ready) {
+        if (ready) {
           section.container.classList.toggle('hide', !sortedUserList.list.childElementCount);
         }
 
@@ -1275,12 +1314,12 @@ export class AppDialogsManager {
       };
 
       const sortedUserList = new SortedUserList({
-        avatarSize: 42, 
+        avatarSize: 42,
         createChatListOptions: {
           dialogSize: 48,
           new: true
         },
-        autonomous: false, 
+        autonomous: false,
         onListLengthChange,
         managers: this.managers
       });
@@ -1293,7 +1332,7 @@ export class AppDialogsManager {
           sortedUserList.add(peerId);
         });
 
-        if(!contacts.length) {
+        if (!contacts.length) {
           this.loadContacts = undefined;
         }
       };
@@ -1301,14 +1340,14 @@ export class AppDialogsManager {
       this.loadContacts();
 
       this.processContact = (peerId) => {
-        if(peerId.isAnyChat()) {
+        if (peerId.isAnyChat()) {
           return;
         }
 
         const good = this.verifyPeerIdForContacts(peerId);
         const added = sortedUserList.has(peerId);
-        if(!added && good) sortedUserList.add(peerId);
-        else if(added && !good) sortedUserList.delete(peerId);
+        if (!added && good) sortedUserList.add(peerId);
+        else if (added && !good) sortedUserList.delete(peerId);
       };
 
       const list = sortedUserList.list;
@@ -1323,18 +1362,18 @@ export class AppDialogsManager {
     bottom.append(section.container);
   };
 
-  private verifyPeerIdForContacts = async(peerId: PeerId) => {
+  private verifyPeerIdForContacts = async (peerId: PeerId) => {
     return await this.managers.appPeersManager.isContact(peerId) && !(await this.managers.appMessagesManager.getDialogOnly(peerId));
   };
 
   public onChatsRegularScroll = () => {
     // return;
 
-    if(this.sliceTimeout) clearTimeout(this.sliceTimeout);
+    if (this.sliceTimeout) clearTimeout(this.sliceTimeout);
     this.sliceTimeout = window.setTimeout(() => {
       this.sliceTimeout = undefined;
 
-      if(!this.chatList.childElementCount || this.processContact) {
+      if (!this.chatList.childElementCount || this.processContact) {
         return;
       }
 
@@ -1348,90 +1387,90 @@ export class AppDialogsManager {
 
       fastRafConventional(() => {
 
-      const perf = performance.now();
+        const perf = performance.now();
 
-      const scrollTopWas = this.scroll.scrollTop;
+        const scrollTopWas = this.scroll.scrollTop;
 
-      const firstElementChild = this.chatList.firstElementChild;
-      const rectContainer = this.scroll.container.getBoundingClientRect();
-      const rectTarget = firstElementChild.getBoundingClientRect();
-      const children = Array.from(this.scroll.splitUp.children) as HTMLElement[];
+        const firstElementChild = this.chatList.firstElementChild;
+        const rectContainer = this.scroll.container.getBoundingClientRect();
+        const rectTarget = firstElementChild.getBoundingClientRect();
+        const children = Array.from(this.scroll.splitUp.children) as HTMLElement[];
 
-      // const padding = 8;
-      // const offsetTop = this.folders.container.offsetTop;
-      let offsetTop = this.scroll.splitUp.offsetTop;
-      if(offsetTop && scrollTopWas < offsetTop) offsetTop -= scrollTopWas;
-      // const offsetTop = scrollTopWas < padding ? padding - scrollTopWas : 0;
-      const firstY = rectContainer.y + offsetTop;
-      const lastY = rectContainer.y/*  - 8 */; // 8px - .chatlist padding-bottom
-      
-      const firstElement = findUpTag(document.elementFromPoint(Math.ceil(rectTarget.x), Math.ceil(firstY + 1)), firstElementChild.tagName) as HTMLElement;
-      const lastElement = findUpTag(document.elementFromPoint(Math.ceil(rectTarget.x), Math.floor(lastY + rectContainer.height - 1)), firstElementChild.tagName) as HTMLElement;
+        // const padding = 8;
+        // const offsetTop = this.folders.container.offsetTop;
+        let offsetTop = this.scroll.splitUp.offsetTop;
+        if (offsetTop && scrollTopWas < offsetTop) offsetTop -= scrollTopWas;
+        // const offsetTop = scrollTopWas < padding ? padding - scrollTopWas : 0;
+        const firstY = rectContainer.y + offsetTop;
+        const lastY = rectContainer.y/*  - 8 */; // 8px - .chatlist padding-bottom
 
-      //alert('got element:' + rect.y);
+        const firstElement = findUpTag(document.elementFromPoint(Math.ceil(rectTarget.x), Math.ceil(firstY + 1)), firstElementChild.tagName) as HTMLElement;
+        const lastElement = findUpTag(document.elementFromPoint(Math.ceil(rectTarget.x), Math.floor(lastY + rectContainer.height - 1)), firstElementChild.tagName) as HTMLElement;
 
-      if(!firstElement || !lastElement) {
-        return;
-      }
+        //alert('got element:' + rect.y);
 
-      //alert('got element:' + !!firstElement);
+        if (!firstElement || !lastElement) {
+          return;
+        }
 
-      const firstElementRect = firstElement.getBoundingClientRect();
-      const elementOverflow = firstElementRect.y - firstY;
+        //alert('got element:' + !!firstElement);
 
-      const sliced: HTMLElement[] = [];
-      const firstIndex = children.indexOf(firstElement);
-      const lastIndex = children.indexOf(lastElement);
+        const firstElementRect = firstElement.getBoundingClientRect();
+        const elementOverflow = firstElementRect.y - firstY;
 
-      const saveLength = 10;
+        const sliced: HTMLElement[] = [];
+        const firstIndex = children.indexOf(firstElement);
+        const lastIndex = children.indexOf(lastElement);
 
-      const sliceFromStart = IS_SAFARI ? [] : children.slice(0, Math.max(0, firstIndex - saveLength));
-      const sliceFromEnd = children.slice(lastIndex + saveLength);
+        const saveLength = 10;
 
-      /* if(sliceFromStart.length !== sliceFromEnd.length) {
-        console.log('not equal', sliceFromStart.length, sliceFromEnd.length);
-      }
+        const sliceFromStart = IS_SAFARI ? [] : children.slice(0, Math.max(0, firstIndex - saveLength));
+        const sliceFromEnd = children.slice(lastIndex + saveLength);
 
-      if(sliceFromStart.length > sliceFromEnd.length) {
-        const diff = sliceFromStart.length - sliceFromEnd.length;
-        sliceFromStart.splice(0, diff);
-      } else if(sliceFromEnd.length > sliceFromStart.length) {
-        const diff = sliceFromEnd.length - sliceFromStart.length;
-        sliceFromEnd.splice(sliceFromEnd.length - diff, diff);
-      } */
+        /* if(sliceFromStart.length !== sliceFromEnd.length) {
+          console.log('not equal', sliceFromStart.length, sliceFromEnd.length);
+        }
+  
+        if(sliceFromStart.length > sliceFromEnd.length) {
+          const diff = sliceFromStart.length - sliceFromEnd.length;
+          sliceFromStart.splice(0, diff);
+        } else if(sliceFromEnd.length > sliceFromStart.length) {
+          const diff = sliceFromEnd.length - sliceFromStart.length;
+          sliceFromEnd.splice(sliceFromEnd.length - diff, diff);
+        } */
 
-      if(sliceFromStart.length) {
-        this.scroll.loadedAll.top = false;
-      }
+        if (sliceFromStart.length) {
+          this.scroll.loadedAll.top = false;
+        }
 
-      if(sliceFromEnd.length) {
-        this.scroll.loadedAll.bottom = false;
-      }
+        if (sliceFromEnd.length) {
+          this.scroll.loadedAll.bottom = false;
+        }
 
-      sliced.push(...sliceFromStart);
-      sliced.push(...sliceFromEnd);
+        sliced.push(...sliceFromStart);
+        sliced.push(...sliceFromEnd);
 
-      sliced.forEach((el) => {
-        const peerId = el.dataset.peerId.toPeerId();
-        this.deleteDialog(peerId);
+        sliced.forEach((el) => {
+          const peerId = el.dataset.peerId.toPeerId();
+          this.deleteDialog(peerId);
+        });
+
+        this.setOffsets();
+
+        //this.log('[slicer] elements', firstElement, lastElement, rect, sliced, sliceFromStart.length, sliceFromEnd.length);
+
+        //this.log('[slicer] reset scrollTop', this.scroll.scrollTop, firstElement.offsetTop, firstElementRect.y, rect.y, elementOverflow);
+
+        //alert('left length:' + children.length);
+
+        this.scroll.scrollTop = firstElement.offsetTop - elementOverflow;
+
+        this.log('slice time', performance.now() - perf);
+        /* const firstElementRect = firstElement.getBoundingClientRect();
+        const scrollTop =  */
+
+        //this.scroll.scrollIntoView(firstElement, false);
       });
-
-      this.setOffsets();
-
-      //this.log('[slicer] elements', firstElement, lastElement, rect, sliced, sliceFromStart.length, sliceFromEnd.length);
-
-      //this.log('[slicer] reset scrollTop', this.scroll.scrollTop, firstElement.offsetTop, firstElementRect.y, rect.y, elementOverflow);
-
-      //alert('left length:' + children.length);
-
-      this.scroll.scrollTop = firstElement.offsetTop - elementOverflow;
-
-      this.log('slice time', performance.now() - perf);
-      /* const firstElementRect = firstElement.getBoundingClientRect();
-      const scrollTop =  */
-
-      //this.scroll.scrollIntoView(firstElement, false);
-    });
     }, 200);
   };
 
@@ -1452,10 +1491,10 @@ export class AppDialogsManager {
   public onChatsScrollTop = () => {
     return this.onChatsScroll('top');
   };
-  
+
   public onChatsScroll = (side: SliceSides = 'bottom') => {
-    if(this.scroll.loadedAll[side]) {
-      if(this.loadContacts) {
+    if (this.scroll.loadedAll[side]) {
+      if (this.loadContacts) {
         this.loadContacts();
       }
     }
@@ -1471,39 +1510,39 @@ export class AppDialogsManager {
 
     list.dataset.autonomous = '' + +autonomous;
     list.addEventListener('mousedown', (e) => {
-      if(e.button !== 0) return;
-      
+      if (e.button !== 0) return;
+
       this.log('dialogs click list');
       const target = e.target as HTMLElement;
       const elem = findUpTag(target, DIALOG_LIST_ELEMENT_TAG);
-      
-      if(!elem) {
+
+      if (!elem) {
         return;
       }
 
       const peerId = elem.dataset.peerId.toPeerId();
 
-      if(e.ctrlKey || e.metaKey) {
+      if (e.ctrlKey || e.metaKey) {
         window.open((elem as HTMLAnchorElement).href || ('#' + peerId), '_blank');
         cancelEvent(e);
         return;
       }
 
-      if(autonomous) {
+      if (autonomous) {
         const sameElement = lastActiveListElement === elem;
-        if(lastActiveListElement && !sameElement) {
+        if (lastActiveListElement && !sameElement) {
           lastActiveListElement.classList.remove('active');
         }
 
-        if(elem) {
+        if (elem) {
           elem.classList.add('active');
           lastActiveListElement = elem;
           this.lastActiveElements.add(elem);
         }
       }
 
-      if(elem) {
-        if(onFound) onFound();
+      if (elem) {
+        if (onFound) onFound();
 
         const lastMsgId = +elem.dataset.mid || undefined;
 
@@ -1513,26 +1552,26 @@ export class AppDialogsManager {
       } else {
         setPeerFunc();
       }
-    }, {capture: true});
+    }, { capture: true });
 
     // cancel link click
     list.addEventListener('click', (e) => {
-      if(e.button === 0) {
+      if (e.button === 0) {
         cancelEvent(e);
       }
-    }, {capture: true});
+    }, { capture: true });
 
-    if(DEBUG) {
+    if (DEBUG) {
       list.addEventListener('dblclick', (e) => {
         const li = findUpTag(e.target, DIALOG_LIST_ELEMENT_TAG);
-        if(li) {
+        if (li) {
           const peerId = li.dataset.peerId.toPeerId();
           this.log('debug dialog:', this.managers.appMessagesManager.getDialogByPeerId(peerId));
         }
       });
     }
 
-    if(withContext) {
+    if (withContext) {
       attachContextMenuListener(list, this.contextMenu.onContextMenu);
     }
   }
@@ -1549,11 +1588,11 @@ export class AppDialogsManager {
     list.classList.add('chatlist'/* , 
       'chatlist-avatar-' + (options.avatarSize || 54) *//* , 'chatlist-' + (options.size || 72) */);
 
-    if(options.new) {
+    if (options.new) {
       list.classList.add('chatlist-new');
     }
 
-    if(options.dialogSize) {
+    if (options.dialogSize) {
       list.classList.add('chatlist-' + options.dialogSize);
     }
 
@@ -1569,10 +1608,10 @@ export class AppDialogsManager {
   }
 
   public setLastMessageN(options: {
-    dialog: Dialog, 
-    lastMessage?: Message.message | Message.messageService, 
-    dom?: DialogDom, 
-    highlightWord?: string, 
+    dialog: Dialog,
+    lastMessage?: Message.message | Message.messageService,
+    dom?: DialogDom,
+    highlightWord?: string,
     isBatch?: boolean,
     setUnread?: boolean
   }) {
@@ -1581,41 +1620,41 @@ export class AppDialogsManager {
   }
 
   private async setLastMessage(
-    dialog: Dialog, 
-    lastMessage: Message.message | Message.messageService, 
-    dom: DialogDom, 
-    highlightWord?: string, 
+    dialog: Dialog,
+    lastMessage: Message.message | Message.messageService,
+    dom: DialogDom,
+    highlightWord?: string,
     isBatch = false,
     setUnread = false
   ) {
-    if(!dom) {
+    if (!dom) {
       dom = this.getDialogDom(dialog.peerId);
 
-      if(!dom) {
+      if (!dom) {
         return;
       }
     }
 
-    const {deferred: promise, middleware} = setPromiseMiddleware(dom, 'setLastMessagePromise');
+    const { deferred: promise, middleware } = setPromiseMiddleware(dom, 'setLastMessagePromise');
 
     let draftMessage: MyDraftMessage;
-    if(!lastMessage) {
-      if(dialog.draft?._ === 'draftMessage') {
+    if (!lastMessage) {
+      if (dialog.draft?._ === 'draftMessage') {
         draftMessage = dialog.draft;
       }
 
       lastMessage = dialog.topMessage;
-      if(!lastMessage || lastMessage.mid !== dialog.top_message) {
+      if (!lastMessage || lastMessage.mid !== dialog.top_message) {
         const promise = this.managers.appMessagesManager.getMessageByPeer(dialog.peerId, dialog.top_message);
         lastMessage = await middleware(promise);
       }
     }
 
-    if(setUnread) {
-      this.setUnreadMessagesN({dialog, dom, isBatch, setLastMessagePromise: promise});
+    if (setUnread) {
+      this.setUnreadMessagesN({ dialog, dom, isBatch, setLastMessagePromise: promise });
     }
 
-    if(!lastMessage/*  || (lastMessage._ === 'messageService' && !lastMessage.rReply) */) {
+    if (!lastMessage/*  || (lastMessage._ === 'messageService' && !lastMessage.rReply) */) {
       dom.lastMessageSpan.textContent = '';
       dom.lastTimeSpan.textContent = '';
       delete dom.listEl.dataset.mid;
@@ -1630,20 +1669,20 @@ export class AppDialogsManager {
     /* if(!dom.lastMessageSpan.classList.contains('user-typing')) */ {
       let mediaContainer: HTMLElement;
       const willPrepend: (Promise<any> | HTMLElement)[] = [];
-      if(lastMessage && !draftMessage && !isRestricted) {
+      if (lastMessage && !draftMessage && !isRestricted) {
         const media: MyDocument | MyPhoto = getMediaFromMessage(lastMessage);
         const videoTypes: Set<MyDocument['type']> = new Set(['video', 'gif', 'round']);
-        if(media && (media._ === 'photo' || videoTypes.has(media.type))) {
+        if (media && (media._ === 'photo' || videoTypes.has(media.type))) {
           const size = choosePhotoSize(media, 20, 20);
 
-          if(size._ !== 'photoSizeEmpty') {
+          if (size._ !== 'photoSizeEmpty') {
             mediaContainer = document.createElement('div');
             mediaContainer.classList.add('dialog-subtitle-media');
 
-            if((media as MyDocument).type === 'round') {
+            if ((media as MyDocument).type === 'round') {
               mediaContainer.classList.add('is-round');
             }
-            
+
             willPrepend.push(wrapPhoto({
               photo: media,
               message: lastMessage,
@@ -1652,7 +1691,7 @@ export class AppDialogsManager {
               size
             }).then(() => mediaContainer));
 
-            if(videoTypes.has((media as MyDocument).type)) {
+            if (videoTypes.has((media as MyDocument).type)) {
               const playIcon = document.createElement('span');
               playIcon.classList.add('tgico-play');
 
@@ -1663,15 +1702,15 @@ export class AppDialogsManager {
       }
 
       /* if(lastMessage.from_id === auth.id) { // You:  */
-      if(draftMessage) {
+      if (draftMessage) {
         const bold = document.createElement('b');
         bold.classList.add('danger');
         bold.append(i18n('Draft'), ': ');
         willPrepend.unshift(bold);
-      } else if(peerId.isAnyChat() && peerId !== lastMessage.fromId && !(lastMessage as Message.messageService).action) {
+      } else if (peerId.isAnyChat() && peerId !== lastMessage.fromId && !(lastMessage as Message.messageService).action) {
         const senderBold = document.createElement('b');
 
-        if(lastMessage.fromId === rootScope.myId) {
+        if (lastMessage.fromId === rootScope.myId) {
           senderBold.append(i18n('FromYou'));
           willPrepend.unshift(senderBold);
         } else {
@@ -1694,17 +1733,17 @@ export class AppDialogsManager {
       const withoutMediaType = !!mediaContainer && !!(lastMessage as Message.message)?.message;
 
       let fragment: DocumentFragment;
-      if(highlightWord && (lastMessage as Message.message).message) {
+      if (highlightWord && (lastMessage as Message.message).message) {
         fragment = await middleware(wrapMessageForReply(lastMessage, undefined, undefined, false, highlightWord, withoutMediaType));
-      } else if(draftMessage) {
+      } else if (draftMessage) {
         fragment = await middleware(wrapMessageForReply(draftMessage));
-      } else if(lastMessage) {
+      } else if (lastMessage) {
         fragment = await middleware(wrapMessageForReply(lastMessage, undefined, undefined, false, undefined, withoutMediaType));
       } else { // rare case
         fragment = document.createDocumentFragment();
       }
 
-      if(willPrepend.length) {
+      if (willPrepend.length) {
         const elements = await middleware(Promise.all(willPrepend));
         fragment.prepend(...elements);
       }
@@ -1712,12 +1751,12 @@ export class AppDialogsManager {
       replaceContent(dom.lastMessageSpan, fragment);
     }
 
-    if(lastMessage || draftMessage/*  && lastMessage._ !== 'draftMessage' */) {
+    if (lastMessage || draftMessage/*  && lastMessage._ !== 'draftMessage' */) {
       const date = draftMessage ? Math.max(draftMessage.date, lastMessage.date || 0) : lastMessage.date;
       replaceContent(dom.lastTimeSpan, formatDateAccordingToTodayNew(new Date(date * 1000)));
     } else dom.lastTimeSpan.textContent = '';
 
-    if(setUnread !== null && !setUnread) { // means search
+    if (setUnread !== null && !setUnread) { // means search
       dom.listEl.dataset.mid = '' + lastMessage.mid;
     }
 
@@ -1730,36 +1769,36 @@ export class AppDialogsManager {
     isBatch?: boolean,
     setLastMessagePromise?: Promise<void>
   }) {
-    return this.setUnreadMessages(options.dialog, options.dom, options.isBatch, options.setLastMessagePromise).catch(() => {});
+    return this.setUnreadMessages(options.dialog, options.dom, options.isBatch, options.setLastMessagePromise).catch(() => { });
   }
 
   private async setUnreadMessages(
-    dialog: Dialog, 
-    dom = this.getDialogDom(dialog.peerId), 
+    dialog: Dialog,
+    dom = this.getDialogDom(dialog.peerId),
     isBatch = false,
     setLastMessagePromise?: Promise<void>
   ) {
-    if(!dom) {
+    if (!dom) {
       //this.log.error('setUnreadMessages no dom!', dialog);
       return;
     }
 
-    const {deferred, middleware} = setPromiseMiddleware(dom, 'setUnreadMessagePromise');
+    const { deferred, middleware } = setPromiseMiddleware(dom, 'setUnreadMessagePromise');
 
     const isMuted = await middleware(this.managers.appNotificationsManager.isPeerLocalMuted(dialog.peerId, true));
     const wasMuted = dom.listEl.classList.contains('is-muted');
 
     let setStatusMessage: MyMessage;
-    if(dialog.draft?._ !== 'draftMessage') {
+    if (dialog.draft?._ !== 'draftMessage') {
       const lastMessage: MyMessage = await middleware(this.managers.appMessagesManager.getMessageByPeer(dialog.peerId, dialog.top_message));
-      if(lastMessage && lastMessage.pFlags.out && lastMessage.peerId !== rootScope.myId) {
+      if (lastMessage && lastMessage.pFlags.out && lastMessage.peerId !== rootScope.myId) {
         setStatusMessage = lastMessage;
       }
     }
 
     const filter = await middleware(this.managers.filtersStorage.getFilter(this.filterId));
     let isPinned: boolean;
-    if(filter) {
+    if (filter) {
       isPinned = filter.pinnedPeerIds.indexOf(dialog.peerId) !== -1;
     } else {
       isPinned = !!dialog.pFlags.pinned;
@@ -1771,31 +1810,31 @@ export class AppDialogsManager {
 
     // * have to await all promises before modifying something
 
-    if(setLastMessagePromise) {
+    if (setLastMessagePromise) {
       try {
         await middleware(setLastMessagePromise);
-      } catch(err) {
+      } catch (err) {
         // return;
       }
     }
 
     const transitionDuration = isBatch ? 0 : 200;
 
-    if(isMuted !== wasMuted) {
+    if (isMuted !== wasMuted) {
       SetTransition(dom.listEl, 'is-muted', isMuted, transitionDuration);
     }
 
     setSendingStatus(dom.statusSpan, setStatusMessage, true);
 
     const isUnreadBadgeMounted = isInDOM(dom.unreadBadge);
-    if(hasUnreadBadge && !isUnreadBadgeMounted) {
+    if (hasUnreadBadge && !isUnreadBadgeMounted) {
       dom.subtitleEl.append(dom.unreadBadge);
     }
 
     const hasMentionsBadge = dialog.unread_mentions_count && (dialog.unread_mentions_count > 1 || dialog.unread_count > 1);
     const isMentionBadgeMounted = dom.mentionsBadge && isInDOM(dom.mentionsBadge);
-    if(hasMentionsBadge) {
-      if(!dom.mentionsBadge) {
+    if (hasMentionsBadge) {
+      if (!dom.mentionsBadge) {
         dom.mentionsBadge = document.createElement('div');
         dom.mentionsBadge.className = 'dialog-subtitle-badge badge badge-24 mention mention-badge';
         dom.mentionsBadge.innerText = '@';
@@ -1807,30 +1846,30 @@ export class AppDialogsManager {
       dom.unreadBadge.remove();
     }, !isUnreadBadgeMounted ? 2 : 0);
 
-    if(dom.mentionsBadge) {
+    if (dom.mentionsBadge) {
       SetTransition(dom.mentionsBadge, 'is-visible', hasMentionsBadge, transitionDuration, hasMentionsBadge ? undefined : () => {
         dom.mentionsBadge.remove();
         delete dom.mentionsBadge;
       }, !isMentionBadgeMounted ? 2 : 0);
     }
 
-    if(!hasUnreadBadge) {
+    if (!hasUnreadBadge) {
       deferred.resolve();
       return;
     }
 
-    if(isPinned) {
+    if (isPinned) {
       dom.unreadBadge.classList.add('tgico-chatspinned', 'tgico');
     } else {
       dom.unreadBadge.classList.remove('tgico-chatspinned', 'tgico');
     }
 
     let isUnread = true, isMention = false;
-    if(dialog.unread_mentions_count && dialog.unread_count === 1) {
+    if (dialog.unread_mentions_count && dialog.unread_count === 1) {
       dom.unreadBadge.innerText = '@';
       isMention = true;
       // dom.unreadBadge.classList.add('tgico-mention', 'tgico');
-    } else if(isDialogUnread) {
+    } else if (isDialogUnread) {
       //dom.unreadMessagesSpan.innerText = '' + (dialog.unread_count ? formatNumber(dialog.unread_count, 1) : ' ');
       dom.unreadBadge.innerText = '' + (dialog.unread_count || ' ');
     } else {
@@ -1850,9 +1889,9 @@ export class AppDialogsManager {
   }
 
   private async getDialog(dialog: Dialog | PeerId) {
-    if(typeof(dialog) !== 'object') {
+    if (typeof (dialog) !== 'object') {
       const originalDialog = await this.managers.appMessagesManager.getDialogOnly(dialog);
-      if(!originalDialog) {
+      if (!originalDialog) {
         const peerId = dialog || NULL_PEER_ID;
         return {
           peerId,
@@ -1863,20 +1902,20 @@ export class AppDialogsManager {
 
       return originalDialog;
     }
-    
+
     return dialog as Dialog;
   }
 
   private setCallStatus(dom: DialogDom, visible: boolean) {
-    let {callIcon, listEl} = dom;
-    if(!callIcon && visible) {
-      const {canvas, startAnimation} = dom.callIcon = callIcon = groupCallActiveIcon(listEl.classList.contains('active'));
+    let { callIcon, listEl } = dom;
+    if (!callIcon && visible) {
+      const { canvas, startAnimation } = dom.callIcon = callIcon = groupCallActiveIcon(listEl.classList.contains('active'));
       canvas.classList.add('dialog-group-call-icon');
       listEl.append(canvas);
       startAnimation();
     }
 
-    if(!callIcon) {
+    if (!callIcon) {
       return;
     }
 
@@ -1886,27 +1925,27 @@ export class AppDialogsManager {
     }, visible ? 2 : 0);
   }
 
-  public addListDialog(options: Parameters<AppDialogsManager['addDialogNew']>[0] & {isBatch?: boolean}) {
+  public addListDialog(options: Parameters<AppDialogsManager['addDialogNew']>[0] & { isBatch?: boolean }) {
     options.autonomous = false;
-    
+
     const ret = this.addDialogNew(options);
-    
-    if(ret) {
+
+    if (ret) {
       const promise = this.getDialog(options.peerId).then((dialog) => {
-        const {peerId} = dialog;
+        const { peerId } = dialog;
         const promises: Promise<any>[] = [];
-        if(!peerId.isUser()) {
+        if (!peerId.isUser()) {
           promises.push(this.processDialogForCallStatus(dialog, ret.dom));
         }
 
-        if(peerId !== rootScope.myId && peerId.isUser()) {
+        if (peerId !== rootScope.myId && peerId.isUser()) {
           promises.push(this.managers.appUsersManager.getUser(peerId).then((user) => {
-            if(user.status?._ === 'userStatusOnline') {
+            if (user.status?._ === 'userStatusOnline') {
               this.setOnlineStatus(ret.dom.avatarEl, true);
             }
           }));
         }
-  
+
         promises.push(this.setLastMessageN({
           dialog,
           dom: ret.dom,
@@ -1917,7 +1956,7 @@ export class AppDialogsManager {
         return Promise.all(promises);
       });
 
-      if(options.loadPromises) {
+      if (options.loadPromises) {
         options.loadPromises.push(promise);
       }
     }
@@ -1926,13 +1965,13 @@ export class AppDialogsManager {
   }
 
   private async processDialogForCallStatus(dialog: Dialog, dom?: DialogDom) {
-    if(!IS_GROUP_CALL_SUPPORTED) {
+    if (!IS_GROUP_CALL_SUPPORTED) {
       return;
     }
 
-    if(!dom) dom = this.getDialogDom(dialog.peerId);
-    if(!dom) return;
-    
+    if (!dom) dom = this.getDialogDom(dialog.peerId);
+    if (!dom) return;
+
     const chat: Chat.chat | Chat.channel = await this.managers.appChatsManager.getChat(dialog.peerId.toChatId());
     this.setCallStatus(dom, !!(chat.pFlags.call_active && chat.pFlags.call_not_empty));
   }
@@ -1941,20 +1980,20 @@ export class AppDialogsManager {
    * use for rendering search result
    */
   public addDialogAndSetLastMessage(options: Omit<Parameters<AppDialogsManager['addDialogNew']>[0], 'dialog'> & {
-    message: MyMessage, 
+    message: MyMessage,
     peerId: PeerId,
     query?: string
   }) {
-    const {peerId, message, query} = options;
+    const { peerId, message, query } = options;
     const ret = this.addDialogNew({
       ...options,
       ...getMessageSenderPeerIdOrName(message),
       peerId,
     });
 
-    this.setLastMessage({_: 'dialog', peerId} as any, message, ret.dom, query);
+    this.setLastMessage({ _: 'dialog', peerId } as any, message, ret.dom, query);
 
-    if(message.peerId !== peerId) {
+    if (message.peerId !== peerId) {
       ret.dom.listEl.dataset.peerId = '' + message.peerId;
     }
 
@@ -1978,14 +2017,14 @@ export class AppDialogsManager {
   }
 
   public addDialog(
-    peerId: PeerId, 
-    container?: HTMLElement | Scrollable | DocumentFragment | false, 
-    rippleEnabled = true, 
-    onlyFirstName = false, 
-    meAsSaved = true, 
-    append = true, 
-    avatarSize = 54, 
-    autonomous = !!container, 
+    peerId: PeerId,
+    container?: HTMLElement | Scrollable | DocumentFragment | false,
+    rippleEnabled = true,
+    onlyFirstName = false,
+    meAsSaved = true,
+    append = true,
+    avatarSize = 54,
+    autonomous = !!container,
     lazyLoadQueue?: LazyLoadQueue,
     loadPromises?: Promise<any>[],
     fromName?: string
@@ -2016,7 +2055,7 @@ export class AppDialogsManager {
       plainText: false
     });
 
-    if(loadPromises) {
+    if (loadPromises) {
       loadPromises.push(peerTitlePromise);
     }
 
@@ -2025,19 +2064,19 @@ export class AppDialogsManager {
 
     // в других случаях иконка верификации не нужна (а первый - это главные чатлисты)
     //if(!container) {
-      
-      // for muted icon
-      titleSpanContainer.classList.add('tgico'); // * эта строка будет актуальна только для !container, но ладно
-      
-      const titleIconsPromise = generateTitleIcons(peerId).then((elements) => {
-        titleSpanContainer.append(...elements);
-      });
 
-      if(loadPromises) {
-        loadPromises.push(titleIconsPromise);
-      }
+    // for muted icon
+    titleSpanContainer.classList.add('tgico'); // * эта строка будет актуальна только для !container, но ладно
+
+    const titleIconsPromise = generateTitleIcons(peerId).then((elements) => {
+      titleSpanContainer.append(...elements);
+    });
+
+    if (loadPromises) {
+      loadPromises.push(titleIconsPromise);
+    }
     //}
-    
+
     const span = document.createElement('span');
     span.classList.add('user-last-message');
     span.setAttribute('dir', 'auto');
@@ -2045,10 +2084,11 @@ export class AppDialogsManager {
     //captionDiv.append(titleSpan);
     //captionDiv.append(span);
 
+
     const li = document.createElement(DIALOG_LIST_ELEMENT_TAG);
     li.classList.add('chatlist-chat');
-    if(!autonomous) (li as HTMLAnchorElement).href = '#' + peerId;
-    if(rippleEnabled) {
+    if (!autonomous) (li as HTMLAnchorElement).href = '#' + peerId;
+    if (rippleEnabled) {
       ripple(li);
     }
 
@@ -2078,6 +2118,24 @@ export class AppDialogsManager {
 
     captionDiv.append(titleP, subtitleEl);
 
+    const badgesList = document.createElement('p');
+    captionDiv.append(badgesList);
+
+
+    //CRM
+    function createBadges() {
+      const badges = CRMDialog.getDialogBadges(peerId.toUserId().toString())
+      badgesList.innerHTML = "";
+      badges.forEach(badge => {
+        badgesList.append(badge);
+      });
+    }
+
+    CRMDialog.emitter.on("updated", () => {
+      createBadges();
+    });
+    createBadges();
+
     const dom: DialogDom = {
       avatarEl,
       captionDiv,
@@ -2098,32 +2156,32 @@ export class AppDialogsManager {
         good = true;
       }
     } */
-    if(container) {
+    if (container) {
       const method = append ? 'append' : 'prepend';
       container[method](li);
     }
 
-    if(!autonomous) {
+    if (!autonomous) {
       // @ts-ignore
       li.dialogDom = dom;
 
-      if(appImManager.chat?.peerId === peerId) {
+      if (appImManager.chat?.peerId === peerId) {
         this.setDialogActive(li, true);
       }
-    } 
-    
-    return {dom};
+    }
+
+    return { dom };
   }
 
   public async setTyping(dialog: Dialog) {
     const dom = this.getDialogDom(dialog.peerId);
-    if(!dom) {
+    if (!dom) {
       return;
     }
 
     const oldTypingElement = dom.lastMessageSpan.querySelector('.peer-typing-container') as HTMLElement;
     const newTypingElement = await appImManager.getPeerTyping(dialog.peerId, oldTypingElement);
-    if(!oldTypingElement && newTypingElement) {
+    if (!oldTypingElement && newTypingElement) {
       replaceContent(dom.lastMessageSpan, newTypingElement);
       dom.lastMessageSpan.classList.add('user-typing');
     }
@@ -2131,14 +2189,14 @@ export class AppDialogsManager {
 
   public unsetTyping(dialog: Dialog) {
     const dom = this.getDialogDom(dialog.peerId);
-    if(!dom) {
+    if (!dom) {
       return;
     }
 
     dom.lastMessageSpan.classList.remove('user-typing');
     this.setLastMessageN({
-      dialog, 
-      lastMessage: null, 
+      dialog,
+      lastMessage: null,
       dom,
       setUnread: null
     });

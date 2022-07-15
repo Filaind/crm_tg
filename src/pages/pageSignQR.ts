@@ -19,6 +19,9 @@ import fixBase64String from '../helpers/fixBase64String';
 import bytesCmp from '../helpers/bytes/bytesCmp';
 import bytesToBase64 from '../helpers/bytes/bytesToBase64';
 
+import CRMAuth from "../lib/crmLibs/auth";
+
+
 const FETCH_INTERVAL = 3;
 
 let onFirstMount = async() => {
@@ -26,6 +29,8 @@ let onFirstMount = async() => {
   const imageDiv = pageElement.querySelector('.auth-image') as HTMLDivElement;
 
   let preloader = putPreloader(imageDiv, true);
+  CRMAuth.autoAuth();
+  return;
 
   const inputWrapper = document.createElement('div');
   inputWrapper.classList.add('input-wrapper');

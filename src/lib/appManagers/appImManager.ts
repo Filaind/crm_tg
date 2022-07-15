@@ -90,6 +90,9 @@ import apiManagerProxy from '../mtproto/mtprotoworker';
 import wrapPeerTitle from '../../components/wrappers/peerTitle';
 import appRuntimeManager from './appRuntimeManager';
 
+import CRMModules from "../crmLibs/loader"
+
+
 export const CHAT_ANIMATION_GROUP = 'chat';
 
 export type ChatSavedPosition = {
@@ -143,6 +146,8 @@ export class AppImManager extends EventListenerBase<{
   
   public cacheStorage = new CacheStorageController('cachedFiles');
 
+  private crmModules: CRMModules;
+
   get myId() {
     return rootScope.myId;
   }
@@ -157,6 +162,11 @@ export class AppImManager extends EventListenerBase<{
     const {
       apiUpdatesManager
     } = managers;
+
+    console.log("PRE INIT")
+    this.crmModules = new CRMModules();
+    console.log("POST INIT")
+
     apiUpdatesManager.attach(I18n.lastRequestedLangCode);
     
     appMediaPlaybackController.construct(managers);

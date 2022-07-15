@@ -50,6 +50,7 @@ import themeController from "../../helpers/themeController";
 import contextMenuController from "../../helpers/contextMenuController";
 import { DIALOG_LIST_ELEMENT_TAG } from "../../lib/appManagers/appDialogsManager";
 import apiManagerProxy from "../../lib/mtproto/mtprotoworker";
+import CRMDialog from "../../lib/crmLibs/dialogs"
 
 export const LEFT_COLUMN_ACTIVE_CLASSNAME = 'is-left-column-shown';
 
@@ -58,14 +59,17 @@ export class AppSidebarLeft extends SidebarSlider {
   private backBtn: HTMLButtonElement;
   //private searchInput = document.getElementById('global-search') as HTMLInputElement;
   private inputSearch: InputSearch;
-  
+
   public archivedCount: HTMLSpanElement;
 
   private newBtnMenu: HTMLElement;
 
+  private filterTypeButton: HTMLElement;
+  private vList: HTMLElement;
+
   //private log = logger('SL');
 
-  private searchGroups: {[k in 'contacts' | 'globalContacts' | 'messages' | 'people' | 'recent']: SearchGroup} = {} as any;
+  private searchGroups: { [k in 'contacts' | 'globalContacts' | 'messages' | 'people' | 'recent']: SearchGroup } = {} as any;
   private searchSuper: AppSearchSuper;
 
   private updateBtn: HTMLElement;
@@ -78,13 +82,43 @@ export class AppSidebarLeft extends SidebarSlider {
     });
   }
 
+  createFilterTypeButton() {
+
+    if (this.filterTypeButton != null)
+      this.vList.removeChild(this.filterTypeButton);
+
+    const filterTypeButtons = CRMDialog.getFilterTypeButton();
+    this.filterTypeButton = ButtonMenuToggle({}, 'bottom-left', filterTypeButtons, (e) => {
+      filterTypeButtons.forEach(button => {
+        if (button.verify) {
+          button.element.classList.toggle('hide', !button.verify());
+        }
+      });
+    });
+
+    this.filterTypeButton.classList.remove('tgico-more');
+    this.filterTypeButton.classList.add('tgico-settings');
+
+    this.vList.append(this.filterTypeButton);
+  }
+
   construct(managers: AppManagers) {
     this.managers = managers;
     //this._selectTab(0); // make first tab as default
 
+    this.vList = document.createElement('p');
+    this.vList.style.display = "contents";
+
     this.inputSearch = new InputSearch('Search');
+    this.vList.append(this.inputSearch.container);
+
+    CRMDialog.emitter.on('selected_type', () => {
+      this.createFilterTypeButton()
+    })
+    this.createFilterTypeButton();
+
     const sidebarHeader = this.sidebarEl.querySelector('.item-main .sidebar-header');
-    sidebarHeader.append(this.inputSearch.container);
+    sidebarHeader.append(this.vList);
 
     const onNewGroupClick = () => {
       this.createTab(AppAddMembersTab).open({
@@ -111,7 +145,7 @@ export class AppSidebarLeft extends SidebarSlider {
       onClick: () => {
         this.createTab(AppArchivedTab).open();
       },
-      verify: async() => {
+      verify: async () => {
         const folder = await this.managers.dialogsStorage.getFolderDialogs(1, false);
         return !!folder.length || !(await this.managers.dialogsStorage.isDialogsLoaded(1));
       }
@@ -121,7 +155,7 @@ export class AppSidebarLeft extends SidebarSlider {
       toggle: true,
       checked: themeController.getTheme().name === 'night'
     });
-    themeCheckboxField.input.addEventListener('change', async() => {
+    themeCheckboxField.input.addEventListener('change', async () => {
       await this.managers.appStateManager.setByKey('settings.theme', themeCheckboxField.input.checked ? 'night' : 'day');
       rootScope.dispatchEvent('theme_change');
     });
@@ -130,7 +164,7 @@ export class AppSidebarLeft extends SidebarSlider {
       themeCheckboxField.setValueSilently(themeController.getTheme().name === 'night');
     });
 
-    const menuButtons: (ButtonMenuItemOptions & {verify?: () => boolean | Promise<boolean>})[] = [{
+    const menuButtons: (ButtonMenuItemOptions & { verify?: () => boolean | Promise<boolean> })[] = [{
       icon: 'saved',
       text: 'SavedMessages',
       onClick: () => {
@@ -160,17 +194,17 @@ export class AppSidebarLeft extends SidebarSlider {
       icon: 'darkmode',
       text: 'DarkMode',
       onClick: () => {
-        
+
       },
       checkboxField: themeCheckboxField
     }, {
       icon: 'animations',
       text: 'Animations',
       onClick: () => {
-        
+
       },
       checkboxField: new CheckboxField({
-        toggle: true, 
+        toggle: true,
         checked: true,
         stateKey: 'settings.animationsEnabled',
       })
@@ -199,7 +233,7 @@ export class AppSidebarLeft extends SidebarSlider {
       text: 'ChatList.Menu.SwitchTo.Z',
       onClick: () => {
         Promise.all([
-          sessionStorage.set({kz_version: 'Z'}),
+          sessionStorage.set({ kz_version: 'Z' }),
           sessionStorage.delete('tgme_sync')
         ]).then(() => {
           location.href = 'https://web.telegram.org/z/';
@@ -219,9 +253,9 @@ export class AppSidebarLeft extends SidebarSlider {
 
     const filteredButtons = menuButtons.filter(Boolean);
 
-    this.toolsBtn = ButtonMenuToggle({}, 'bottom-right', filteredButtons, async(e) => {
-      await Promise.all(filteredButtons.map(async(button) => {
-        if(button.verify) {
+    this.toolsBtn = ButtonMenuToggle({}, 'bottom-right', filteredButtons, async (e) => {
+      await Promise.all(filteredButtons.map(async (button) => {
+        if (button.verify) {
           button.element.classList.toggle('hide', !(await button.verify()));
         }
       }));
@@ -245,7 +279,7 @@ export class AppSidebarLeft extends SidebarSlider {
     const t = document.createElement('span');
     t.classList.add('btn-menu-footer-text');
     t.innerHTML = 'Telegram Web' + App.suffix + ' '/* ' alpha ' */ + App.versionFull;
-    btnMenuFooter.append(t); 
+    btnMenuFooter.append(t);
     btnMenu.classList.add('has-footer');
     btnMenu.append(btnMenuFooter);
 
@@ -282,13 +316,13 @@ export class AppSidebarLeft extends SidebarSlider {
     // this.updateBtn.prepend(weaveContainer);
 
     attachClickEvent(this.updateBtn, () => {
-      if(this.updateBtn.classList.contains('is-hidden')) {
+      if (this.updateBtn.classList.contains('is-hidden')) {
         return;
       }
-      
+
       location.reload();
     });
-    
+
     sidebarHeader.nextElementSibling.append(this.updateBtn);
 
     // setTimeout(() => {
@@ -298,7 +332,7 @@ export class AppSidebarLeft extends SidebarSlider {
     //   weave.handleBlur();
     // }, 1e3);
 
-    this.inputSearch.input.addEventListener('focus', () => this.initSearch(), {once: true});
+    this.inputSearch.input.addEventListener('focus', () => this.initSearch(), { once: true });
 
     //parseMenuButtonsTo(this.newButtons, this.newBtnMenu.firstElementChild.children);
 
@@ -308,7 +342,7 @@ export class AppSidebarLeft extends SidebarSlider {
     btnArchive.element.append(this.archivedCount);
 
     rootScope.addEventListener('folder_unread', (folder) => {
-      if(folder.id === 1) {
+      if (folder.id === 1) {
         // const count = folder.unreadMessagesCount;
         const count = folder.unreadPeerIds.size;
         this.archivedCount.innerText = '' + formatNumber(count, 1);
@@ -335,19 +369,19 @@ export class AppSidebarLeft extends SidebarSlider {
     apiManagerProxy.getState().then((state) => {
       const CHECK_UPDATE_INTERVAL = 1800e3;
       const checkUpdateInterval = setInterval(() => {
-        fetch('version', {cache: 'no-cache'})
-        .then((res) => (res.status === 200 && res.ok && res.text()) || Promise.reject())
-        .then((text) => {
-          if(text !== App.versionFull) {
-            this.hasUpdate = true;
-            clearInterval(checkUpdateInterval);
+        fetch('version', { cache: 'no-cache' })
+          .then((res) => (res.status === 200 && res.ok && res.text()) || Promise.reject())
+          .then((text) => {
+            if (text !== App.versionFull) {
+              this.hasUpdate = true;
+              clearInterval(checkUpdateInterval);
 
-            if(!this.newBtnMenu.classList.contains('is-hidden')) {
-              this.updateBtn.classList.remove('is-hidden');
+              if (!this.newBtnMenu.classList.contains('is-hidden')) {
+                this.updateBtn.classList.remove('is-hidden');
+              }
             }
-          }
-        })
-        .catch(noop);
+          })
+          .catch(noop);
       }, CHECK_UPDATE_INTERVAL);
     });
   }
@@ -359,7 +393,7 @@ export class AppSidebarLeft extends SidebarSlider {
 
     const close = () => {
       //setTimeout(() => {
-        this.backBtn.click();
+      this.backBtn.click();
       //}, 0);
     };
 
@@ -396,9 +430,9 @@ export class AppSidebarLeft extends SidebarSlider {
         inputFilter: 'inputMessagesFilterRoundVoice',
         name: 'SharedVoiceTab2',
         type: 'voice'
-      }], 
-      scrollable, 
-      searchGroups: this.searchGroups, 
+      }],
+      scrollable,
+      searchGroups: this.searchGroups,
       asChatList: true,
       hideEmptyTabs: false,
       showSender: true,
@@ -410,11 +444,11 @@ export class AppSidebarLeft extends SidebarSlider {
 
     const resetSearch = () => {
       searchSuper.setQuery({
-        peerId: ''.toPeerId(), 
+        peerId: ''.toPeerId(),
         folderId: 0
       });
       searchSuper.selectTab(0);
-      searchSuper.load(true); 
+      searchSuper.load(true);
     };
 
     resetSearch();
@@ -428,7 +462,7 @@ export class AppSidebarLeft extends SidebarSlider {
       this.inputSearch.container.classList.toggle('is-picked-twice', pickedElements.length === 2);
       this.inputSearch.container.classList.toggle('is-picked', !!pickedElements.length);
 
-      if(pickedElements.length) {
+      if (pickedElements.length) {
         this.inputSearch.input.style.setProperty('--paddingLeft', (pickedElements[pickedElements.length - 1].getBoundingClientRect().right - this.inputSearch.input.getBoundingClientRect().left) + 'px');
       } else {
         this.inputSearch.input.style.removeProperty('--paddingLeft');
@@ -439,12 +473,12 @@ export class AppSidebarLeft extends SidebarSlider {
     helper.classList.add('search-helper');
     helper.addEventListener('click', (e) => {
       const target = findUpClassName(e.target, 'selector-user');
-      if(!target) {
+      if (!target) {
         return;
       }
 
       const key = target.dataset.key;
-      if(key.indexOf('date_') === 0) {
+      if (key.indexOf('date_') === 0) {
         const [_, minDate, maxDate] = key.split('_');
         selectedMinDate = +minDate;
         selectedMaxDate = +maxDate;
@@ -473,18 +507,18 @@ export class AppSidebarLeft extends SidebarSlider {
       avatarEl.isDialog = true;
 
       div.dataset.key = '' + key;
-      if(key.isPeerId()) {
-        if(title === undefined) {
-          title = new PeerTitle({peerId: key.toPeerId()}).element;
+      if (key.isPeerId()) {
+        if (title === undefined) {
+          title = new PeerTitle({ peerId: key.toPeerId() }).element;
         }
 
-        avatarEl.updateWithOptions({peerId: key as PeerId});
+        avatarEl.updateWithOptions({ peerId: key as PeerId });
       } else {
         avatarEl.classList.add('tgico-calendarfilter');
       }
 
-      if(title) {
-        if(typeof(title) === 'string') {
+      if (title) {
+        if (typeof (title) === 'string') {
           div.innerHTML = title;
         } else {
           replaceContent(div, title);
@@ -499,12 +533,12 @@ export class AppSidebarLeft extends SidebarSlider {
 
     const unselectEntity = (target: HTMLElement) => {
       const key = target.dataset.key;
-      if(key.indexOf('date_') === 0) {
+      if (key.indexOf('date_') === 0) {
         selectedMinDate = selectedMaxDate = 0;
       } else {
         selectedPeerId = ''.toPeerId();
       }
-      
+
       target.remove();
       indexOfAndSplice(pickedElements, target);
 
@@ -523,7 +557,7 @@ export class AppSidebarLeft extends SidebarSlider {
     this.inputSearch.onChange = (value) => {
       searchSuper.cleanupHTML();
       searchSuper.setQuery({
-        peerId: selectedPeerId, 
+        peerId: selectedPeerId,
         folderId: selectedPeerId ? undefined : 0,
         query: value,
         minDate: selectedMinDate,
@@ -533,29 +567,29 @@ export class AppSidebarLeft extends SidebarSlider {
 
       helper.innerHTML = '';
       searchSuper.nav.classList.remove('hide');
-      if(!value) {
+      if (!value) {
       }
-      
-      if(!selectedPeerId && value.trim()) {
+
+      if (!selectedPeerId && value.trim()) {
         const middleware = searchSuper.middleware.get();
         Promise.all([
           // appMessagesManager.getConversationsAll(value).then((dialogs) => dialogs.map((d) => d.peerId)),
-          this.managers.appMessagesManager.getConversations(value).then(({dialogs}) => dialogs.map((d) => d.peerId)),
+          this.managers.appMessagesManager.getConversations(value).then(({ dialogs }) => dialogs.map((d) => d.peerId)),
           this.managers.appUsersManager.getContactsPeerIds(value, true)
         ]).then((results) => {
-          if(!middleware()) return;
+          if (!middleware()) return;
           const peerIds = new Set(results[0].concat(results[1]));
-  
+
           peerIds.forEach((peerId) => {
             helper.append(renderEntity(peerId));
           });
-  
+
           searchSuper.nav.classList.toggle('hide', !!helper.innerHTML);
           //console.log('got peerIds by value:', value, [...peerIds]);
         });
       }
-      
-      if(!selectedMinDate && value.trim()) {
+
+      if (!selectedMinDate && value.trim()) {
         const dates: DateData[] = [];
         fillTipDates(value, dates);
         dates.forEach((dateData) => {
@@ -568,18 +602,18 @@ export class AppSidebarLeft extends SidebarSlider {
 
     searchSuper.tabs.inputMessagesFilterEmpty.addEventListener('mousedown', (e) => {
       const target = findUpTag(e.target, DIALOG_LIST_ELEMENT_TAG) as HTMLElement;
-      if(!target) {
+      if (!target) {
         return;
       }
 
       const searchGroup = findUpClassName(target, 'search-group');
-      if(!searchGroup || searchGroup.classList.contains('search-group-recent') || searchGroup.classList.contains('search-group-people')) {
+      if (!searchGroup || searchGroup.classList.contains('search-group-recent') || searchGroup.classList.contains('search-group-people')) {
         return;
       }
 
       const peerId = target.getAttribute('data-peer-id').toPeerId();
       this.managers.appUsersManager.pushRecentSearch(peerId);
-    }, {capture: true});
+    }, { capture: true });
 
     let peopleContainer = document.createElement('div');
     peopleContainer.classList.add('search-group-scrollable');
@@ -591,9 +625,9 @@ export class AppSidebarLeft extends SidebarSlider {
     let hideNewBtnMenuTimeout: number;
     //const transition = Transition.bind(null, searchContainer.parentElement, 150);
     const transition = TransitionSlider(searchContainer.parentElement, 'zoom-fade', 150, (id) => {
-      if(hideNewBtnMenuTimeout) clearTimeout(hideNewBtnMenuTimeout);
+      if (hideNewBtnMenuTimeout) clearTimeout(hideNewBtnMenuTimeout);
 
-      if(id === 0 && !first) {
+      if (id === 0 && !first) {
         searchSuper.selectTab(0, false);
         this.inputSearch.onClearClick();
         hideNewBtnMenuTimeout = window.setTimeout(() => {
@@ -617,7 +651,7 @@ export class AppSidebarLeft extends SidebarSlider {
       this.toolsBtn.parentElement.firstElementChild.classList.toggle('state-back', true);
 
       const navigationType: NavigationItem['type'] = 'global-search';
-      if(!IS_MOBILE_SAFARI && !appNavigationController.findItemByType(navigationType)) {
+      if (!IS_MOBILE_SAFARI && !appNavigationController.findItemByType(navigationType)) {
         appNavigationController.pushItem({
           onPop: () => {
             close();
@@ -661,7 +695,7 @@ export class AppSidebarLeft extends SidebarSlider {
 }
 
 export type SettingSectionOptions = {
-  name?: LangPackKey, 
+  name?: LangPackKey,
   nameArgs?: FormatterArguments,
   caption?: LangPackKey | true,
   noDelimiter?: boolean,
@@ -688,14 +722,14 @@ export class SettingSection {
     const innerContainer = this.innerContainer = document.createElement('div');
     innerContainer.classList.add(className);
 
-    if(options.noShadow) {
+    if (options.noShadow) {
       innerContainer.classList.add('no-shadow');
     }
 
-    if(options.fakeGradientDelimiter) {
+    if (options.fakeGradientDelimiter) {
       innerContainer.append(generateDelimiter());
       innerContainer.classList.add('with-fake-delimiter');
-    } else if(!options.noDelimiter) {
+    } else if (!options.noDelimiter) {
       const hr = document.createElement('hr');
       innerContainer.append(hr);
     } else {
@@ -712,22 +746,22 @@ export class SettingSection {
 
     const content = this.content = this.generateContentElement();
 
-    if(options.name) {
+    if (options.name) {
       const title = this.title = document.createElement('div');
       title.classList.add('sidebar-left-h2', className + '-name');
-      i18n_({element: title, key: options.name, args: options.nameArgs});
+      i18n_({ element: title, key: options.name, args: options.nameArgs });
       content.append(title);
     }
 
     container.append(innerContainer);
 
-    if(options.caption) {
+    if (options.caption) {
       const caption = this.caption = this.generateContentElement();
       caption.classList.add(className + '-caption');
       container.append(caption);
 
-      if(options.caption !== true) {
-        i18n_({element: caption, key: options.caption});
+      if (options.caption !== true) {
+        i18n_({ element: caption, key: options.caption });
       }
     }
   }
@@ -746,7 +780,7 @@ export class SettingSection {
 }
 
 export const generateSection = (appendTo: Scrollable, name?: LangPackKey, caption?: LangPackKey) => {
-  const section = new SettingSection({name, caption});
+  const section = new SettingSection({ name, caption });
   appendTo.append(section.container);
   return section.content;
 };
@@ -760,7 +794,7 @@ export const generateDelimiter = () => {
 export class SettingChatListSection extends SettingSection {
   public sortedList: SortedUserList;
 
-  constructor(options: SettingSectionOptions & {sortedList: SortedUserList}) {
+  constructor(options: SettingSectionOptions & { sortedList: SortedUserList }) {
     super(options);
 
     this.sortedList = options.sortedList;
@@ -770,7 +804,7 @@ export class SettingChatListSection extends SettingSection {
 
   public makeButton(options: ButtonOptions) {
     const button = Button('folder-category-button btn btn-primary btn-transparent', options);
-    if(this.title) this.content.insertBefore(button, this.title.nextSibling);
+    if (this.title) this.content.insertBefore(button, this.title.nextSibling);
     else this.content.prepend(button);
     return button;
   }
