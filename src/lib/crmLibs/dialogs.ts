@@ -13,6 +13,8 @@ class CRMDialogs {
     dialogs: Array<any> = [];
     emitter = new Emittery();
 
+    selectedGroupFilter: string = "Все";
+
     selectedTypeFilter: string = "Все";
 
     canLoadDefaultDialogs: boolean = true;
@@ -24,9 +26,21 @@ class CRMDialogs {
 
     public init() {
         console.log("CRMDialogs")
+        this.getGroups()
         this.getTypes()
-        this.getDialogs();
+        this.getDialogs()
+    }
 
+    public async getGroups() {
+        console.log("Get dialog groups")
+
+        var res = await request.get('/dialogs/groups')
+        this.dialogGroups = [];
+        var body = res.data;
+        body.forEach((e: any) => {
+            this.dialogGroups.push(e)
+        });
+        this.selectFilterGroup('Все');
     }
 
     public async getTypes() {
@@ -48,6 +62,8 @@ class CRMDialogs {
         body.forEach((e: any) => {
             this.dialogs.push(e)
         });
+
+        console.log("Dialogs length", this.dialogs.length)
 
         this.emitter.emit('updated');
     }
@@ -75,6 +91,31 @@ class CRMDialogs {
         return dialogTypesButtons;
     }
 
+    public getDialogGroupsButtons(chat: Chat) {
+        const userId = chat.peerId.toUserId().toString();
+        const dialog = this.dialogs.find((e: any) => e.userId == userId);
+        console.log(userId, dialog)
+
+        var dialogGroupsButtons: (ButtonMenuItemOptions & { verify: () => boolean })[] = [];
+        this.dialogGroups.forEach((e) => {
+            var selected = dialog != null ? (dialog.group == e.group ? 'danger' : '') : '';
+            console.log("selected")
+            console.log(selected)
+            dialogGroupsButtons.push({
+                icon: 'select ' + selected,
+                regularText: e['group'],
+                onClick: () => {
+                    this.markDialogGroup(userId, e['group']).then(() => {
+                        this.getDialogs();
+                    })
+                },
+                verify: () => true,
+            })
+        })
+
+        return dialogGroupsButtons;
+    }
+
     public async markDialogType(userId: string, type: string) {
         await request.post('/dialogs/mark', {
             userId: userId,
@@ -83,7 +124,7 @@ class CRMDialogs {
         return;
     }
     public async markDialogGroup(userId: string, group: string) {
-        await request.post('/dialog/mark', {
+        await request.post('/dialogs/mark', {
             userId: userId,
             group: group
         })
@@ -94,18 +135,31 @@ class CRMDialogs {
         this.emitter.emit('updated');
     }
 
-
     public getDialogBadges(userId: string): Array<HTMLElement> {
         const dialog = this.dialogs.find((e: any) => e.userId == userId);
         if (!dialog) return [];
 
         var badges: Array<HTMLElement> = [];
 
+        //type
         const badgeType = document.createElement('div');
         badgeType.className = 'dialog-subtitle-badge badge badge-24 is-visible unread';
-        badgeType.innerText = dialog['type'];
 
-        return [badgeType];
+        if (dialog.type !== undefined && dialog.type.length > 0) {
+            badgeType.innerText = dialog['type'];
+            badges.push(badgeType);
+        }
+
+        //group
+        const badgeGroup = document.createElement('div');
+        badgeGroup.className = 'dialog-subtitle-badge badge badge-24 is-visible unread';
+
+        if (dialog.group !== undefined && dialog.group.length > 0) {
+            badgeGroup.innerText = dialog['group'];
+            badges.push(badgeGroup);
+        }
+
+        return badges;
     }
 
     public getDialog(userId: string): any {
@@ -115,7 +169,19 @@ class CRMDialogs {
     }
 
 
+    public selectFilterGroup(type: string) {
+        this.selectedGroupFilter = type;
+        this.emitter.emit('selected_group');
 
+        if (this.selectedGroupFilter == 'Все' || this.selectedGroupFilter == 'Без тега') {
+            this.canLoadDefaultDialogs = true;
+            this.emitter.emit('load_dialogs');
+        }
+        else {
+            this.canLoadDefaultDialogs = false;
+            this.emitter.emit('load_crm_dialogs');
+        }
+    }
 
 
     public selectFilter(type: string) {
@@ -130,6 +196,50 @@ class CRMDialogs {
             this.canLoadDefaultDialogs = false;
             this.emitter.emit('load_crm_dialogs');
         }
+    }
+
+
+    public getFilterGroupButton() {
+        var dialogGroupsButtons: (ButtonMenuItemOptions & { verify: () => boolean })[] = [];
+        dialogGroupsButtons.push({
+            icon: 'select' + (this.selectedGroupFilter == 'Все' ? ' danger' : ''),
+            regularText: 'Все',
+            onClick: () => {
+                this.selectFilterGroup('Все');
+            },
+            verify: () => true,
+        })
+
+        dialogGroupsButtons.push({
+            icon: 'select' + (this.selectedGroupFilter == 'Без тега' ? ' danger' : ''),
+            regularText: 'Без тега',
+            onClick: () => {
+                this.selectFilterGroup('Без тега');
+            },
+            verify: () => true,
+        })
+
+        dialogGroupsButtons.push({
+            icon: '',
+            regularText: '',
+            onClick: () => {
+            },
+            verify: () => true,
+        })
+
+
+        this.dialogGroups.forEach((e) => {
+            dialogGroupsButtons.push({
+                icon: 'select' + (this.selectedGroupFilter == e['group'] ? ' danger' : ''),
+                regularText: e['group'],
+                onClick: () => {
+                    this.selectFilterGroup(e['group']);
+                },
+                verify: () => true,
+            })
+        })
+
+        return dialogGroupsButtons;
     }
 
 
@@ -177,7 +287,7 @@ class CRMDialogs {
     }
 
     public getCRMDialogsToLoad() {
-        return this.dialogs.filter((e: any) => e['type'] == this.selectedTypeFilter && e['userId'] != 0);
+        return this.dialogs.filter((e: any) => e['type'] == this.selectedTypeFilter || e['group'] == this.selectedGroupFilter);
     }
 
     public canAddDialog(dialog: Dialog) {
@@ -185,6 +295,16 @@ class CRMDialogs {
         if (this.selectedTypeFilter == "Все")
             return true;
         if (this.selectedTypeFilter == "Без тега" && d == null)
+            return true;
+
+        return false;
+    }
+
+    public canAddDialogGroup(dialog: Dialog) {
+        const d = this.getDialog(dialog.peerId.toUserId().toString())
+        if (this.selectedGroupFilter == "Все")
+            return true;
+        if (this.selectedGroupFilter == "Без тега" && d == null)
             return true;
 
         return false;

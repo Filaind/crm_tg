@@ -69,8 +69,12 @@ export default class ChatTopbar {
   private btnSearch: HTMLButtonElement;
   private btnMore: HTMLElement;
 
+  //CRM
   private btnDialogType: HTMLElement;
   private dialogTypes: (ButtonMenuItemOptions & { verify: () => boolean })[];
+
+  private btnDialogGroup: HTMLElement;
+  private dialogGroups: (ButtonMenuItemOptions & { verify: () => boolean })[];
 
 
   private chatAudio: ChatAudio;
@@ -108,6 +112,16 @@ export default class ChatTopbar {
       this.btnDialogType.classList.add('tgico-settings');
 
       this.chatUtils.appendChild(this.btnDialogType);
+
+
+      this.chatUtils.removeChild(this.btnDialogGroup);
+      this.dialogGroups = CRMDialog.getDialogGroupsButtons(this.chat);
+      this.btnDialogGroup = ButtonMenuToggle({ listenerSetter: this.listenerSetter }, 'bottom-left', this.dialogGroups, this.verifyButtons);
+
+      this.btnDialogGroup.classList.remove('tgico-more');
+      this.btnDialogGroup.classList.add('tgico-settings');
+
+      this.chatUtils.appendChild(this.btnDialogGroup);
     })
 
     //this.chat.log.error('Topbar construction');
@@ -165,6 +179,11 @@ export default class ChatTopbar {
     }
 
     //CRM
+    this.dialogGroups = CRMDialog.getDialogGroupsButtons(this.chat);
+    this.btnDialogGroup = ButtonMenuToggle({ listenerSetter: this.listenerSetter }, 'bottom-left', this.dialogGroups, this.verifyButtons);
+    this.btnDialogGroup.classList.remove('tgico-more');
+    this.btnDialogGroup.classList.add('tgico-settings');
+
     this.dialogTypes = CRMDialog.getDialogTypesButtons(this.chat);
     this.btnDialogType = ButtonMenuToggle({ listenerSetter: this.listenerSetter }, 'bottom-left', this.dialogTypes, this.verifyButtons);
     this.btnDialogType.classList.remove('tgico-more');
@@ -180,6 +199,7 @@ export default class ChatTopbar {
       this.btnMute,
       this.btnSearch,
       this.btnMore,
+      this.btnDialogGroup,
       this.btnDialogType
     ].filter(Boolean));
 

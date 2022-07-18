@@ -741,6 +741,9 @@ export class AppDialogsManager {
       if (!this.sortedList.has(dialog.peerId)) {
 
         //CRM
+        if(!CRMDialog.canAddDialogGroup(dialog))
+          return;
+
         if(!CRMDialog.canAddDialog(dialog))
           return;
         
@@ -1068,6 +1071,14 @@ export class AppDialogsManager {
 
             //CRM
             if(CRMDialog.canAddDialog(dialog))
+            {
+              const element = this.sortedList.add(dialog.peerId, true, /* undefined, false,  */cccc, false);
+              if (element.loadPromises) {
+                loadPromises.push(...element.loadPromises);
+              }
+            }
+
+            if(CRMDialog.canAddDialogGroup(dialog))
             {
               const element = this.sortedList.add(dialog.peerId, true, /* undefined, false,  */cccc, false);
               if (element.loadPromises) {
@@ -2136,6 +2147,8 @@ export class AppDialogsManager {
       badges.forEach(badge => {
         badgesList.append(badge);
       });
+      //console.log("Badges")
+      //console.log(peerId.toUserId().toString(), badgesList)
     }
 
     //CRM

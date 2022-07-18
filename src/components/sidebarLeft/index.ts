@@ -64,6 +64,10 @@ export class AppSidebarLeft extends SidebarSlider {
 
   private newBtnMenu: HTMLElement;
 
+  //CRM
+  private filterGroupButton: HTMLElement;
+  private vListGroup: HTMLElement;
+
   private filterTypeButton: HTMLElement;
   private vList: HTMLElement;
 
@@ -83,6 +87,27 @@ export class AppSidebarLeft extends SidebarSlider {
   }
 
   //CRM
+  createFilterGroupButton() {
+
+    if (this.filterGroupButton != null)
+      this.vListGroup.removeChild(this.filterGroupButton);
+
+    const filterGroupButtons = CRMDialog.getFilterGroupButton();
+    this.filterGroupButton = ButtonMenuToggle({}, 'bottom-left', filterGroupButtons, (e) => {
+      filterGroupButtons.forEach(button => {
+        if (button.verify) {
+          button.element.classList.toggle('hide', !button.verify());
+        }
+      });
+    });
+
+    this.filterGroupButton.classList.remove('tgico-more');
+    this.filterGroupButton.classList.add('tgico-settings');
+
+    this.vListGroup.append(this.filterGroupButton);
+  }
+
+
   createFilterTypeButton() {
 
     if (this.filterTypeButton != null)
@@ -109,6 +134,7 @@ export class AppSidebarLeft extends SidebarSlider {
     
 
     //CRM Тут кнопка фильтра по типу диалогов
+
     this.vList = document.createElement('p');
     this.vList.style.display = "contents";
 
@@ -122,6 +148,20 @@ export class AppSidebarLeft extends SidebarSlider {
 
     const sidebarHeader = this.sidebarEl.querySelector('.item-main .sidebar-header');
     sidebarHeader.append(this.vList);
+
+    // -start- кнопка групп
+    this.vListGroup = document.createElement('p');
+    this.vListGroup.style.display = "contents";
+
+    CRMDialog.emitter.on('selected_group', () => {
+      this.createFilterGroupButton()
+    })
+    this.createFilterGroupButton();
+
+    const sidebarHeaderGroup = this.sidebarEl.querySelector('.item-main .sidebar-header');
+    sidebarHeaderGroup.append(this.vListGroup);
+    // -end- кнока групп
+
     //END
 
     const onNewGroupClick = () => {
