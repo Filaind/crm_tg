@@ -34,7 +34,10 @@ const lang = {
   "Login.QR.Login": "Log in by QR Code",
   "PHONE_CODE_INVALID": "Invalid code",
   "PHONE_CODE_EXPIRED": "Code expired",
-  "PASSWORD_HASH_INVALID": "Incorrect password"
+  "PASSWORD_HASH_INVALID": "Incorrect password",
+  
+
+  "Оператор не найден": "Оператор не найден",
 };
 
 export default lang;

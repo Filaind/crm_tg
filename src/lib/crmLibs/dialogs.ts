@@ -5,6 +5,8 @@ import { request } from './request';
 
 import Emittery from 'emittery';
 import { Dialog } from '../appManagers/appMessagesManager';
+import { showAuthPage } from './pages/pageAuthOperator';
+import crmOperator from './operators';
 
 class CRMDialogs {
     private dialogTypes: Array<any> = [];
@@ -29,6 +31,8 @@ class CRMDialogs {
         this.getGroups()
         this.getTypes()
         this.getDialogs()
+
+        crmOperator.auth(localStorage.getItem('operator'));
     }
 
     public async getGroups() {
@@ -64,7 +68,6 @@ class CRMDialogs {
         });
 
         console.log("Dialogs length", this.dialogs.length)
-
         this.emitter.emit('updated');
     }
 
@@ -121,6 +124,7 @@ class CRMDialogs {
             userId: userId,
             type: type
         })
+
         return;
     }
     public async markDialogGroup(userId: string, group: string) {

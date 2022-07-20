@@ -49,6 +49,7 @@ import groupCallsController from "../../lib/calls/groupCallsController";
 import apiManagerProxy from "../../lib/mtproto/mtprotoworker";
 
 import CRMDialog from "../../lib/crmLibs/dialogs"
+import crmOperator from "../../lib/crmLibs/operators";
 
 
 type ButtonToVerify = { element?: HTMLElement, verify: () => boolean | Promise<boolean> };
@@ -799,6 +800,7 @@ export default class ChatTopbar {
 
       this.container.classList.remove('hide');
       CRMDialog.dialogChanged();
+      crmOperator.dialogOpened();
     };
   }
 
@@ -856,7 +858,7 @@ export default class ChatTopbar {
     }
 
     return () => {
-      replaceContent(this.title, titleEl);
+      replaceContent(this.title, "Пользователь");
       if (icons) {
         this.title.append(...icons);
       }

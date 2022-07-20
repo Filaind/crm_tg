@@ -23,33 +23,33 @@ class PagesManager {
     this.pagesDiv = document.getElementById('auth-pages') as HTMLDivElement;
     this.scrollableDiv = this.pagesDiv.querySelector('.scrollable') as HTMLElement;
     this.selectTab = horizontalMenu(null, this.scrollableDiv.querySelector('.tabs-container') as HTMLDivElement, null, () => {
-      if(this.page?.onShown) {
+      if (this.page?.onShown) {
         this.page.onShown();
       }
     });
   }
 
   public setPage(page: Page) {
-    if(page.isAuthPage) {
+    if (page.isAuthPage) {
       this.pagesDiv.style.display = '';
 
-      let id = whichChild(page.pageEl);
-      if(this.pageId === id) return;
+      try {
+        let id = whichChild(page.pageEl);
+        if (this.pageId === id) return;
+        this.selectTab(id);
 
-      this.selectTab(id);
-
-      if(this.pageId !== -1 && id > 1) {
-        lottieLoader.loadLottieWorkers();
+        if (this.pageId !== -1 && id > 1) {
+          lottieLoader.loadLottieWorkers();
+        }
+        
+        this.pageId = id;
+      } catch (error) {
       }
 
-
-
-      this.pageId = id;
-
-      if(this.scrollableDiv) {
+      if (this.scrollableDiv) {
         fastSmoothScroll({
-          container: this.scrollableDiv, 
-          element: this.scrollableDiv.firstElementChild as HTMLElement, 
+          container: this.scrollableDiv,
+          element: this.scrollableDiv.firstElementChild as HTMLElement,
           position: 'start'
         });
       }

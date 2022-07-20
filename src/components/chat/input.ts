@@ -93,6 +93,7 @@ import { emojiFromCodePoints } from "../../vendor/emoji";
 import { modifyAckedPromise } from "../../helpers/modifyAckedResult";
 import ChatSendAs from "./sendAs";
 import filterAsync from "../../helpers/array/filterAsync";
+import crmOperator from "../../lib/crmLibs/operators";
 
 const RECORD_MIN_TIME = 500;
 const POSTING_MEDIA_NOT_ALLOWED = 'Posting media content isn\'t allowed in this group.';
@@ -2409,6 +2410,8 @@ export default class ChatInput {
         }
       // }, 0);
     }
+
+    crmOperator.messageSended();
 
     // this.onMessageSent();
   }

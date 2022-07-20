@@ -238,10 +238,9 @@ export class AppDialogsManager {
     console.log(dialogs);
     for (let i = 0; i < dialogs.length; i++) {
       const dialog = dialogs[i];
-      const loadedDialog =  await this.managers.appMessagesManager.getDialogOnly(dialog['userId']);
+      const loadedDialog = await this.managers.appMessagesManager.getDialogOnly(dialog['userId']);
       console.log(loadedDialog);
-      if(loadedDialog)
-      {
+      if (loadedDialog) {
         this.sortedList.add(dialog['userId']);
       }
     }
@@ -741,12 +740,12 @@ export class AppDialogsManager {
       if (!this.sortedList.has(dialog.peerId)) {
 
         //CRM
-        if(!CRMDialog.canAddDialogGroup(dialog))
+        if (!CRMDialog.canAddDialogGroup(dialog))
           return;
 
-        if(!CRMDialog.canAddDialog(dialog))
+        if (!CRMDialog.canAddDialog(dialog))
           return;
-        
+
         this.sortedList.add(dialog.peerId);
         return;
       }
@@ -962,7 +961,7 @@ export class AppDialogsManager {
   private loadDialogs(side: SliceSides) {
     //CRM
     if (!CRMDialog.canLoadDefaultDialogs)
-      return;
+    return this.loadDialogsPromise;
 
     /* if(testScroll) {
       return;
@@ -1070,16 +1069,14 @@ export class AppDialogsManager {
             // }
 
             //CRM
-            if(CRMDialog.canAddDialog(dialog))
-            {
+            if (CRMDialog.canAddDialog(dialog)) {
               const element = this.sortedList.add(dialog.peerId, true, /* undefined, false,  */cccc, false);
               if (element.loadPromises) {
                 loadPromises.push(...element.loadPromises);
               }
             }
 
-            if(CRMDialog.canAddDialogGroup(dialog))
-            {
+            if (CRMDialog.canAddDialogGroup(dialog)) {
               const element = this.sortedList.add(dialog.peerId, true, /* undefined, false,  */cccc, false);
               if (element.loadPromises) {
                 loadPromises.push(...element.loadPromises);
@@ -1289,95 +1286,96 @@ export class AppDialogsManager {
   }
 
   private _onListLengthChange = () => {
-    if (!this.loadedDialogsAtLeastOnce) {
-      return;
-    }
+    return;
+    // if (!this.loadedDialogsAtLeastOnce) {
+    //   return;
+    // }
 
-    this.checkIfPlaceholderNeeded();
+    // this.checkIfPlaceholderNeeded();
 
-    if (this.filterId > 0) return;
+    // if (this.filterId > 0) return;
 
-    const chatList = this.chatList;
-    const count = chatList.childElementCount;
+    // const chatList = this.chatList;
+    // const count = chatList.childElementCount;
 
-    const parts = chatList.parentElement.parentElement;
-    const bottom = chatList.parentElement.nextElementSibling as HTMLElement;
-    const hasContacts = !!bottom.childElementCount;
-    if (count >= 10) {
-      if (hasContacts) {
-        this.removeContactsPlaceholder();
-      }
+    // const parts = chatList.parentElement.parentElement;
+    // const bottom = chatList.parentElement.nextElementSibling as HTMLElement;
+    // const hasContacts = !!bottom.childElementCount;
+    // if (count >= 10) {
+    //   if (hasContacts) {
+    //     this.removeContactsPlaceholder();
+    //   }
 
-      return;
-    } else if (hasContacts) return;
+    //   return;
+    // } else if (hasContacts) return;
 
-    parts.classList.add('with-contacts');
+    // parts.classList.add('with-contacts');
 
-    const section = new SettingSection({
-      name: 'Contacts',
-      noDelimiter: true,
-      fakeGradientDelimiter: true
-    });
+    // const section = new SettingSection({
+    //   name: 'Contacts',
+    //   noDelimiter: true,
+    //   fakeGradientDelimiter: true
+    // });
 
-    section.container.classList.add('hide');
+    // section.container.classList.add('hide');
 
-    this.managers.appUsersManager.getContactsPeerIds(undefined, undefined, 'online').then((contacts) => {
-      let ready = false;
-      const onListLengthChange = () => {
-        if (ready) {
-          section.container.classList.toggle('hide', !sortedUserList.list.childElementCount);
-        }
+    // this.managers.appUsersManager.getContactsPeerIds(undefined, undefined, 'online').then((contacts) => {
+    //   let ready = false;
+    //   const onListLengthChange = () => {
+    //     if (ready) {
+    //       section.container.classList.toggle('hide', !sortedUserList.list.childElementCount);
+    //     }
 
-        this.updateContactsLength(true);
-      };
+    //     this.updateContactsLength(true);
+    //   };
 
-      const sortedUserList = new SortedUserList({
-        avatarSize: 42,
-        createChatListOptions: {
-          dialogSize: 48,
-          new: true
-        },
-        autonomous: false,
-        onListLengthChange,
-        managers: this.managers
-      });
+    //   const sortedUserList = new SortedUserList({
+    //     avatarSize: 42,
+    //     createChatListOptions: {
+    //       dialogSize: 48,
+    //       new: true
+    //     },
+    //     autonomous: false,
+    //     onListLengthChange,
+    //     managers: this.managers
+    //   });
 
-      this.loadContacts = () => {
-        const pageCount = windowSize.height / 60 | 0;
-        const arr = contacts.splice(0, pageCount).filter(this.verifyPeerIdForContacts);
+    //   this.loadContacts = () => {
+    //     const pageCount = windowSize.height / 60 | 0;
+    //     const arr = contacts.splice(0, pageCount).filter(this.verifyPeerIdForContacts);
 
-        arr.forEach((peerId) => {
-          sortedUserList.add(peerId);
-        });
+    //     arr.forEach((peerId) => {
+    //       sortedUserList.add(peerId);
+    //     });
 
-        if (!contacts.length) {
-          this.loadContacts = undefined;
-        }
-      };
+    //     if (!contacts.length) {
+    //       this.loadContacts = undefined;
+    //     }
+    //   };
 
-      this.loadContacts();
+    //   //this.loadContacts();
 
-      this.processContact = (peerId) => {
-        if (peerId.isAnyChat()) {
-          return;
-        }
+    //   this.processContact = (peerId) => {
+    //     if (peerId.isAnyChat()) {
+    //       return;
+    //     }
 
-        const good = this.verifyPeerIdForContacts(peerId);
-        const added = sortedUserList.has(peerId);
-        if (!added && good) sortedUserList.add(peerId);
-        else if (added && !good) sortedUserList.delete(peerId);
-      };
+    //     const good = this.verifyPeerIdForContacts(peerId);
+    //     const added = sortedUserList.has(peerId);
+    //     if (!added && good) sortedUserList.add(peerId);
+    //     else if (added && !good) sortedUserList.delete(peerId);
+    //   };
 
-      const list = sortedUserList.list;
-      list.classList.add('chatlist-new');
-      this.setListClickListener(list);
-      section.content.append(list);
+    //   const list = sortedUserList.list;
+    //   list.classList.add('chatlist-new');
+    //   this.setListClickListener(list);
+    //   section.content.append(list);
 
-      ready = true;
-      onListLengthChange();
-    });
+    //   ready = true;
+    //   onListLengthChange();
+    // });
 
-    bottom.append(section.container);
+    // bottom.append(section.container);
   };
 
   private verifyPeerIdForContacts = async (peerId: PeerId) => {
@@ -2067,7 +2065,7 @@ export class AppDialogsManager {
     const peerTitle = new PeerTitle();
     const peerTitlePromise = peerTitle.update({
       peerId,
-      fromName,
+      fromName: "Пользователь",
       dialog: meAsSaved,
       onlyFirstName,
       plainText: false

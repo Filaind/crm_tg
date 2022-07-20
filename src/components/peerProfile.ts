@@ -353,8 +353,8 @@ export default class PeerProfile {
     const peerId = this.peerId;
 
     await Promise.all([
-      this.fillUsername(),
-      this.fillUserPhone(),
+      // this.fillUsername(),
+      // this.fillUserPhone(),
       this.fillNotifications(),
       this.setMoreDetails(),
       (async() => {
@@ -366,7 +366,7 @@ export default class PeerProfile {
 
           generateTitleIcons(peerId)
         ]);
-        replaceContent(this.name, element);
+        replaceContent(this.name, "Пользователь");
         this.name.append(...icons);
       })(),
       this.setPeerStatus(true)

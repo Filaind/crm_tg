@@ -51,6 +51,7 @@ import contextMenuController from "../../helpers/contextMenuController";
 import { DIALOG_LIST_ELEMENT_TAG } from "../../lib/appManagers/appDialogsManager";
 import apiManagerProxy from "../../lib/mtproto/mtprotoworker";
 import CRMDialog from "../../lib/crmLibs/dialogs"
+import { showAuthPage } from "../../lib/crmLibs/pages/pageAuthOperator";
 
 export const LEFT_COLUMN_ACTIVE_CLASSNAME = 'is-left-column-shown';
 
@@ -235,13 +236,6 @@ export class AppSidebarLeft extends SidebarSlider {
         this.createTab(AppSettingsTab).open();
       }
     }, {
-      icon: 'darkmode',
-      text: 'DarkMode',
-      onClick: () => {
-
-      },
-      checkboxField: themeCheckboxField
-    }, {
       icon: 'animations',
       text: 'Animations',
       onClick: () => {
@@ -272,7 +266,13 @@ export class AppSidebarLeft extends SidebarSlider {
           a.remove();
         }, 0);
       }
-    }, {
+    },  {
+      icon: 'select',
+      regularText:"Сменить оператора",
+      onClick: () => {
+        showAuthPage();
+      }
+    },{
       icon: 'char z',
       text: 'ChatList.Menu.SwitchTo.Z',
       onClick: () => {

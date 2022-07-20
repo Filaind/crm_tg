@@ -97,7 +97,8 @@ export class ThemeController {
   }
 
   public isNight() {
-    return this.getTheme().name === 'night';
+    //return this.getTheme().name === 'night';
+    return true;
   }
 
   public getTheme(name: Theme['name'] = rootScope.settings.theme === 'system' ? this.systemTheme : rootScope.settings.theme) {

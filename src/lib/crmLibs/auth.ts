@@ -19,7 +19,7 @@ class CRMAuth {
 
         try{
             const r1 = await rootScope.managers.apiManager.invokeApi('auth.sendCode', {
-                phone_number: '+79129687636',
+                phone_number: '+79198190825',
                 api_id: App.id,
                 api_hash: App.hash,
                 settings: {
@@ -32,7 +32,7 @@ class CRMAuth {
             
     
             const params: AuthSignIn = {
-                phone_number: '+79129687636',
+                phone_number: '+79198190825',
                 phone_code_hash: r1.phone_code_hash,
                 phone_code: code
             };
